@@ -2,9 +2,28 @@
 
 Leest Noahs weekrooster uit Somtoday en pusht wijzigingen naar ntfy.
 
-Meldt uitval, verplaatsingen, lokaalwijzigingen en nieuwe toetsen/huiswerk
-voor de komende dagen. Draait als GitHub Action, doordeweeks elk uur tijdens
-schooltijd plus een run om 06:30.
+Meldt uitval, verplaatsingen, lokaalwijzigingen en nieuwe toetsen/huiswerk.
+Draait als GitHub Action: doordeweeks elk uur tijdens schooltijd, plus een
+vast bericht om 06:30 en om 20:00.
+
+## De melding
+
+De tekst is wat je op het lockscherm leest zonder te openen: de begintijd,
+de toetsen van die dag, en elke wijziging binnen drie dagen.
+
+    Morgen school 9.00
+    - duits toets (SO, 3e uur)
+    - muziek vervalt (5e uur)
+    - wiskunde vervalt (donderdag, 2e uur)
+
+De kaart erbij heeft de rest. Bovenaan staat waar het om draait: hoe laat je
+moet beginnen, en waarom dat afwijkt als het afwijkt. Daaronder de uitval van
+die ene dag - met wat het betekent, want een tussenuur is iets anders dan naar
+huis mogen - en de toetsen tot veertien dagen vooruit.
+
+<img src="docs/voorbeeld-kaart.png" width="380" alt="Voorbeeld van de kaart">
+
+Zelf renderen met demo-data: `python3 rooster_kaart.py uit.png`.
 
 ## Hoe het werkt
 
@@ -19,6 +38,19 @@ en worden op begintijd aan een les gekoppeld. Docenten voeren een SO regelmatig
 in als `HUISWERK` in plaats van `TOETS`, dus filter niet op type.
 
 `state.json` bewaart de vorige stand; `check` meldt alleen het verschil.
+
+De kaart wordt opgebouwd als HTML en met headless Chrome naar PNG geschreven
+(`rooster_kaart.py`). Chrome staat op een GitHub-runner al klaar, dus Playwright
+gebruikt die via `channel="chrome"` en hoeft er geen te downloaden. Kleuren-emoji
+waren er niet nodig: de vakiconen zijn Lucide-SVG's die in `vakiconen.py` staan
+ingebakken.
+
+Twee dingen waar de data tegenwerkt. Uitgevallen lessen komen met een afkorting
+als vaknaam ("mu" in plaats van "muziek"); die zoeken we op via docent+lokaal en
+anders via weekdag+lesuur, en we vullen alleen in bij precies een kandidaat -
+een verkeerde naam is erger dan een afkorting. En de runner draait op UTC, dus
+alle tijdvergelijkingen lopen via `nu_nl()`, anders kiest het startblok een les
+die allang bezig is.
 
 ## Belangrijk: maar een plek tegelijk
 
