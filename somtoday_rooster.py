@@ -517,6 +517,12 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime) -> list[str]:
     return regels
 
 
+def _headerwaarde(tekst: str) -> str:
+    """Maak tekst geschikt voor een HTTP-header: geen regeleinden, latin-1."""
+    plat = tekst.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
+    return plat.encode("utf-8").decode("latin-1", "replace")
+
+
 def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> None:
     """Push via ntfy. Leest server en topic uit config.json."""
     cfg = {}
@@ -531,7 +537,7 @@ def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> Non
     kop = {
         "User-Agent": USER_AGENT,
         # ntfy-headers zijn latin-1; accenten gaan er anders uit met een fout.
-        "Title": titel.encode("utf-8").decode("latin-1", "replace"),
+        "Title": _headerwaarde(titel),
         "Tags": "calendar",
     }
     if bijlage and os.path.exists(bijlage):
@@ -540,7 +546,9 @@ def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> Non
         with open(bijlage, "rb") as fh:
             body = fh.read()
         kop["Filename"] = os.path.basename(bijlage)
-        kop["Message"] = tekst.encode("utf-8").decode("latin-1", "replace")
+        # Een HTTP-header mag geen echte regeleinden bevatten; ntfy verwacht
+        # daar de twee tekens \n en zet die zelf weer om.
+        kop["Message"] = _headerwaarde(tekst)
         req = urllib.request.Request(f"{server}/{topic}", data=body, headers=kop, method="PUT")
     else:
         req = urllib.request.Request(f"{server}/{topic}", data=tekst.encode("utf-8"), headers=kop)
