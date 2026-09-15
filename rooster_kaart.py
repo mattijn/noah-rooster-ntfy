@@ -43,14 +43,14 @@ def kleur(vak: str) -> tuple[str, str]:
 
 CSS = """
 *{margin:0;padding:0;box-sizing:border-box}
-body{width:%dpx;background:#fcfcfa;color:#17191d;padding:18px 16px 20px;
+body{width:%dpx;background:#fff;color:#17191d;padding:18px 16px 20px;
  font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 /* Geen titel, en de datum niet rechtsboven: daar zet de ntfy-app zijn eigen
    icoon overheen. Hij staat nu rechts in het startblok. */
 .datum{font-size:12px;color:#9a9a92;font-weight:600;margin-left:auto;
  align-self:center;flex:none}
 
-.start{margin-top:0;border:1.5px solid #e0e4e8;background:#f4f6f8;
+.start{margin-top:0;border:1.5px solid #e6e6e6;background:#fff;
  border-radius:16px;padding:13px 16px 14px}
 .start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#6a7280}
 /* Twee kolommen: de tijd links, de details ernaast. Onder elkaar bleef er
@@ -64,7 +64,7 @@ body{width:%dpx;background:#fcfcfa;color:#17191d;padding:18px 16px 20px;
  color:#a8481f;background:#fbeee6;border-radius:8px;padding:5px 10px}
 
 h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16px 0 4px}
-.rij{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #f1f0ec}
+.rij{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #eeeeee}
 .rij:last-child{border-bottom:none}
 .chip{width:36px;height:36px;border-radius:11px;flex:none;display:flex;
  align-items:center;justify-content:center;position:relative;overflow:hidden}
