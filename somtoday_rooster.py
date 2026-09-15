@@ -481,10 +481,10 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
     regels: list[str] = []
 
     def binnen(begin: str | None) -> bool:
+        # Wijzigingen blijven over het hele venster gaan; alleen de dagnaam
+        # valt weg als het toch al de dag uit de titel is.
         wanneer = _tijdstip(begin)
-        if not wanneer or wanneer > tot:
-            return False
-        return hoofddag is None or wanneer.date() == hoofddag
+        return bool(wanneer) and wanneer <= tot
 
     def plek(rec: dict) -> str:
         wanneer = _tijdstip(rec.get("begin") or rec.get("datumTijd"))
@@ -900,8 +900,8 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
         titel = f"{blok['dag'].capitalize()} school {gesproken_tijd(blok['tijd'])}"
         hoofddag = blok.get("datum")
 
-    # Alleen de dag uit de titel. Wat verder weg ligt staat op de kaart, en
-    # die zie je zodra je de melding opent.
+    # Toetsen verderop staan op de kaart; die zie je zodra je de melding opent.
+    # Wijzigingen blijven wel in de tekst, want die lees je zonder te openen.
     regels: list[str] = []
     for t in toetsen:
         if t["_datum"] != hoofddag:
