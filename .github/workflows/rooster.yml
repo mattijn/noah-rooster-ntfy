@@ -4,7 +4,8 @@ on:
   schedule:
     # Met een tijdzone per regel; zonder dat zou alles UTC zijn en twee keer
     # per jaar een uur verschuiven.
-    - cron: "30 6 * * 1-5"     # ochtendbericht
+    # Voor 07:00 zet de school nog niets bij; eerder kijken heeft geen zin.
+    - cron: "15 7 * * 1-5"     # ochtendbericht
       timezone: "Europe/Amsterdam"
     - cron: "0 7-17 * * 1-5"   # elk uur tijdens schooltijd
       timezone: "Europe/Amsterdam"
@@ -56,7 +57,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           # De ochtendrun stuurt altijd een bericht met de agenda; de uurruns
           # alleen als er echt iets gewijzigd is.
-          ALTIJD: ${{ (github.event.schedule == '30 6 * * 1-5' || github.event.schedule == '30 17 * * 0-4' || inputs.altijd) && '--altijd' || '' }}
+          ALTIJD: ${{ (github.event.schedule == '15 7 * * 1-5' || github.event.schedule == '30 17 * * 0-4' || inputs.altijd) && '--altijd' || '' }}
         run: python3 somtoday_rooster.py check --notify --kaart --dagen 3 --vooruit 14 $ALTIJD
 
       # Moet ook draaien als de stap hierboven faalt: het token kan dan al
