@@ -489,6 +489,11 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime) -> list[str]:
         for veld, label in GEVOLGD.items():
             if voor.get(veld) == na.get(veld):
                 continue
+            if veld == "vak" and (_is_vakcode(voor.get("vak")) or _is_vakcode(na.get("vak"))):
+                # Een afkorting die door vul_vaknamen is aangevuld (of juist niet
+                # opgelost kon worden) is geen vakwissel. Zonder dit meldt hij
+                # "vak mu wordt muziek".
+                continue
             was, wordt = voor.get(veld) or "-", na.get(veld) or "-"
             if veld == "wijziging":
                 # De API schrijft hier hele zinnen ("Les vervalt", "De les is
