@@ -810,7 +810,12 @@ def kaartgegevens(snapshots: dict, nu: dt.datetime, vooruit: int) -> tuple:
                 elif not ervoor and not erna:
                     gevolg, klok = "geen les", ""
                 else:
-                    gevolg, klok = "tussenuur", ""
+                    # Het gat loopt van het einde van de vorige les tot het
+                    # begin van de volgende; de pauzes ertussen zijn ook vrij.
+                    eind = _tijdstip(ervoor[-1].get("eind"))
+                    gevolg = "tussenuur"
+                    klok = (f"{eind:%H:%M}-{erna[0]['_begin']:%H:%M}"
+                            if eind else erna[0]["_begin"].strftime("tot %H:%M"))
                 positie = "midden" if gevolg == "tussenuur" else "rand"
                 uitval.append({**basis, "gevolg": gevolg, "klok": klok, "positie": positie})
                 continue

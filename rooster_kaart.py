@@ -77,7 +77,8 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 .rechts{text-align:right;white-space:nowrap;flex:none;padding-left:6px}
 .rechts .groot{font-size:15px;font-weight:800;line-height:1.15}
 .rechts .was{font-size:12px;color:#a6a69e;text-decoration:line-through;display:block;margin-top:1px}
-.rechts .klok{font-size:13px;color:#6b6b63;font-weight:700;display:block;margin-top:1px}
+.rechts .klok{font-size:13px;color:#6b6b63;font-weight:700;display:block;
+ margin-top:1px;font-variant-numeric:tabular-nums}
 .rechts .voor{font-size:11.5px;color:#9a9a92;font-weight:700;display:block;
  letter-spacing:.02em;margin-bottom:1px}
 .rechts .tel{font-size:11.5px;color:#9a9a92;font-weight:700;display:block;margin-top:1px}
@@ -199,7 +200,7 @@ DEMO = dict(
     uitval=[{"vak": "handvaardigheid", "dag": "1e uur", "tijd": "09:00",
              "gevolg": "later beginnen", "klok": "10:10", "positie": "rand"},
             {"vak": "muziek", "dag": "4e uur", "tijd": "12:45",
-             "gevolg": "tussenuur", "klok": "", "positie": "midden"},
+             "gevolg": "tussenuur", "klok": "12:30-13:55", "positie": "midden"},
             {"vak": "lichamelijke opvoeding", "dag": "6e uur", "tijd": "15:00",
              "gevolg": "eerder uit", "klok": "14:55", "positie": "rand"}],
     gewijzigd=[{"vak": "aardrijkskunde", "dag": "3e uur", "tijd": "11:30",
