@@ -8,13 +8,20 @@ vast bericht om 06:30 en om 17:30 (Europe/Amsterdam, dus geen gedoe met zomertij
 
 ## De melding
 
-De tekst is wat je op het lockscherm leest zonder te openen: de begintijd,
-de toetsen van die dag, en elke wijziging binnen drie dagen.
+De tekst is wat je op het lockscherm leest zonder te openen.
 
     Morgen school 9.00
     - duits toets (SO, 3e uur)
     - muziek vervalt (5e uur)
     - wiskunde vervalt (donderdag, 2e uur)
+
+Toetsen en wijzigingen hebben bewust een verschillend bereik. Een **toets**
+staat er alleen als hij op de dag uit de titel valt; verder vooruit kijk je op
+de kaart, want daar heb je nu toch niets mee te doen. Een **wijziging** staat er
+ook als hij verderop valt (binnen drie dagen), met de dagnaam erbij - die wil je
+weten zodra hij bekend is, en de kaart toont hem niet omdat die over een dag
+gaat. Valt iets op de dag uit de titel, dan blijft de dagnaam weg: "muziek
+vervalt (5e uur)".
 
 De kaart erbij heeft de rest. Bovenaan staat waar het om draait: hoe laat je
 moet beginnen, en waarom dat afwijkt als het afwijkt. Daaronder de uitval van
@@ -54,6 +61,21 @@ anders via weekdag+lesuur, en we vullen alleen in bij precies een kandidaat -
 een verkeerde naam is erger dan een afkorting. En de runner draait op UTC, dus
 alle tijdvergelijkingen lopen via `nu_nl()`, anders kiest het startblok een les
 die allang bezig is.
+
+## Commando's
+
+    python3 somtoday_rooster.py login              # eenmalig, via de browser
+    python3 somtoday_rooster.py rooster            # weekrooster in de terminal
+    python3 somtoday_rooster.py check              # wat is er veranderd
+    python3 somtoday_rooster.py check --notify --kaart
+
+Bij `check`: `--dagen` is het venster voor wijzigingen (standaard 3), `--vooruit`
+dat voor toetsen op de kaart (standaard 14), `--altijd` pusht ook als er niets
+veranderd is, en `--reset` legt de beginstand opnieuw vast.
+
+Een run handmatig uitlokken zonder te wachten:
+
+    gh workflow run rooster.yml --repo mattijn/noah-rooster-ntfy -f altijd=true
 
 ## Belangrijk: maar een plek tegelijk
 
