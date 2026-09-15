@@ -650,70 +650,146 @@ def vul_vaknamen(snapshots: dict) -> None:
                     break
 
 
-def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) -> tuple:
-    """Zet de komende dagen om in de drie secties van de patch notes-kaart.
+DAGNAMEN = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+MAANDEN = ["jan", "feb", "mrt", "apr", "mei", "jun",
+           "jul", "aug", "sep", "okt", "nov", "dec"]
 
-    Bewust de *stand* van het venster, niet het verschil: de kaart laat zien
-    wat er aan de hand is, de tekst van de melding zegt wat er net veranderde.
-    """
-    dagnamen = ["ma", "di", "wo", "do", "vr", "za", "zo"]
-    grens = nu + dt.timedelta(days=dagen)
-    winst, verschuivingen = [], []
+_WAS_LOKAAL = re.compile(r"lokaal.*?\(was\s+([^)]+)\)", re.I)
+_WAS_TIJD = re.compile(r"verplaatst.*?van\s+\w*\s*(\d{1,2}[:.]\d{2})", re.I)
 
+
+def _tijdstip(waarde: str | None) -> dt.datetime | None:
+    try:
+        return dt.datetime.fromisoformat((waarde or "")[:19])
+    except ValueError:
+        return None
+
+
+def _vervalt(les: dict) -> bool:
+    return "vervalt" in (les.get("wijziging") or "").lower()
+
+
+def _lessen_per_dag(snapshots: dict) -> dict[dt.date, list[dict]]:
+    """Groepeer alle lessen per datum, op tijd gesorteerd."""
+    per_dag: dict[dt.date, list[dict]] = {}
     for snap in snapshots.values():
         for les in snap.get("lessen", {}).values():
-            try:
-                begin = dt.datetime.fromisoformat((les.get("begin") or "")[:19])
-            except ValueError:
+            if wanneer := _tijdstip(les.get("begin")):
+                per_dag.setdefault(wanneer.date(), []).append({**les, "_begin": wanneer})
+    for lijst in per_dag.values():
+        lijst.sort(key=lambda l: (l["_begin"], l.get("lesuur") or 0))
+    return per_dag
+
+
+def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
+    """Beschrijf de eerstvolgende schooldag die nog niet begonnen is.
+
+    Drie situaties, alledrie rechtstreeks uit de data af te leiden:
+    gewoon (niets aan de hand), later (er vervalt iets aan het begin) en
+    eerder (er is juist iets naar het eerste uur verplaatst) - dat laatste is
+    het geval waarin je denkt vrij te zijn maar er staat iets anders.
+    """
+    kandidaten = sorted(d for d in per_dag if d >= nu.date())
+    for datum in kandidaten:
+        lessen = per_dag[datum]
+        doorgaand = [l for l in lessen if not _vervalt(l) and l["_begin"] > nu]
+        if not doorgaand and not any(l["_begin"] > nu for l in lessen):
+            continue  # deze dag is voorbij
+        dagnaam = ("vandaag" if datum == nu.date()
+                   else "morgen" if datum == nu.date() + dt.timedelta(days=1)
+                   else f"{DAGNAMEN[datum.weekday()]} {datum.day} {MAANDEN[datum.month - 1]}")
+        if not doorgaand:
+            return {"dag": dagnaam, "geen_les": True}
+
+        eerste = doorgaand[0]
+        vervallen_ervoor = [l for l in lessen
+                            if _vervalt(l) and l["_begin"] < eerste["_begin"]]
+        wijziging = (eerste.get("wijziging") or "").strip()
+
+        soort, reden = "gewoon", None
+        if "verplaatst" in wijziging.lower():
+            soort = "eerder"
+            reden = f"{eerste.get('vak')} is naar het {eerste.get('lesuur')}e uur verplaatst"
+        elif vervallen_ervoor:
+            soort = "later"
+            uren = [str(l.get("lesuur")) for l in vervallen_ervoor]
+            reden = (f"{uren[0]}e uur vervalt" if len(uren) == 1
+                     else f"{' en '.join(uren)}e uur vervallen")
+        return {"dag": dagnaam, "soort": soort, "reden": reden,
+                "tijd": eerste["_begin"].strftime("%H:%M"),
+                "uur": eerste.get("lesuur"), "vak": eerste.get("vak"),
+                "lokaal": eerste.get("lokaal")}
+    return None
+
+
+def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) -> tuple:
+    """Zet de komende dagen om in de secties van de kaart."""
+    per_dag = _lessen_per_dag(snapshots)
+    grens = nu + dt.timedelta(days=dagen)
+    uitval, gewijzigd = [], []
+
+    for datum in sorted(per_dag):
+        lessen = per_dag[datum]
+        doorgaand = [l for l in lessen if not _vervalt(l)]
+        for les in lessen:
+            if not (nu <= les["_begin"] <= grens):
                 continue
-            if not nu <= begin <= grens:
+            dag = DAGNAMEN[datum.weekday()]
+            basis = {"vak": les.get("vak") or "?", "dag": dag,
+                     "uur": les.get("lesuur"), "tijd": les["_begin"].strftime("%H:%M")}
+
+            if _vervalt(les):
+                ervoor = [l for l in doorgaand if l["_begin"] < les["_begin"]]
+                erna = [l for l in doorgaand if l["_begin"] > les["_begin"]]
+                if not ervoor and erna:
+                    gevolg, klok = "later beginnen", erna[0]["_begin"].strftime("%H:%M")
+                elif ervoor and not erna:
+                    eind = _tijdstip(ervoor[-1].get("eind"))
+                    gevolg, klok = "eerder uit", eind.strftime("%H:%M") if eind else ""
+                elif not ervoor and not erna:
+                    gevolg, klok = "geen les", ""
+                else:
+                    gevolg, klok = "tussenuur", ""
+                positie = "midden" if gevolg == "tussenuur" else "rand"
+                uitval.append({**basis, "gevolg": gevolg, "klok": klok, "positie": positie})
                 continue
+
             wijziging = (les.get("wijziging") or "").strip()
             if not wijziging:
                 continue
-            wanneer = f"{dagnamen[begin.weekday()]} {les.get('lesuur')}e"
-            if "vervalt" in wijziging.lower():
-                try:
-                    eind = dt.datetime.fromisoformat((les.get("eind") or "")[:19])
-                    minuten = max(0, int((eind - begin).total_seconds() // 60))
-                except ValueError:
-                    minuten = 50
-                winst.append({"vak": les.get("vak") or "?", "wanneer": wanneer,
-                              "minuten": minuten, "_sort": begin})
+            if m := _WAS_LOKAAL.search(wijziging):
+                gewijzigd.append({**basis, "label": "ander lokaal",
+                                  "nu": les.get("lokaal") or "?", "was": m.group(1)})
+            elif m := _WAS_TIJD.search(wijziging):
+                gewijzigd.append({**basis, "label": "verplaatst",
+                                  "nu": basis["tijd"], "was": m.group(1).replace(".", ":")})
             else:
-                verschuivingen.append({"vak": les.get("vak") or "?",
-                                       "wanneer": f"{wanneer} uur",
-                                       "wat": wijziging.rstrip("."), "_sort": begin})
+                gewijzigd.append({**basis, "label": wijziging.rstrip("."), "nu": "", "was": ""})
 
-    bosses = []
+    toetsen = []
     for snap in snapshots.values():
         for rec in snap.get("huiswerk", {}).values():
-            try:
-                wanneer = dt.datetime.fromisoformat((rec.get("datumTijd") or "")[:19])
-            except ValueError:
+            wanneer = _tijdstip(rec.get("datumTijd"))
+            if not wanneer:
                 continue
             resterend = (wanneer.date() - nu.date()).days
-            if not 0 <= resterend <= vooruit:
-                continue
-            bosses.append({"vak": rec.get("vak") or "?", "onderwerp": rec.get("onderwerp") or "?",
-                           "dagen": resterend, "toets": rec.get("type") in ("TOETS", "GROTE_TOETS"),
-                           "_sort": wanneer})
+            if 0 <= resterend <= vooruit:
+                toetsen.append({"vak": rec.get("vak") or "?", "wat": rec.get("onderwerp") or "?",
+                                "dagen": resterend, "_s": wanneer})
+    toetsen.sort(key=lambda t: t["_s"])
+    for t in toetsen:
+        t.pop("_s")
 
-    for lijst in (winst, verschuivingen, bosses):
-        lijst.sort(key=lambda x: x["_sort"])
-        for x in lijst:
-            x.pop("_sort")
-    return winst, verschuivingen, bosses
+    return startblok(per_dag, nu), uitval, gewijzigd, toetsen
 
 
-def kaartkop(winst: list[dict], bosses: list[dict]) -> str:
-    """Een titel waar een twaalfjarige op tikt."""
-    if winst:
-        return f"+{sum(w['minuten'] for w in winst)} MIN VRIJ"
-    dichtstbij = min((b for b in bosses if b["toets"]), key=lambda b: b["dagen"], default=None)
-    if dichtstbij and dichtstbij["dagen"] <= 1:
-        return "BOSS INCOMING"
-    return "Rooster update"
+def kaartkop(start: dict | None) -> str:
+    """De regel op het lockscherm; de begintijd is daar het nuttigst."""
+    if not start:
+        return "Rooster"
+    if start.get("geen_les"):
+        return f"{start['dag'].capitalize()}: geen les"
+    return f"{start['dag'].capitalize()} begin je om {start['tijd']}"
 
 
 def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
@@ -803,14 +879,14 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
 
     bijlage = None
     if kaart:
-        winst, verschuivingen, bosses = kaartgegevens(verse, nu, dagen, vooruit)
-        if winst or verschuivingen or bosses:
+        blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, dagen, vooruit)
+        if blok or uitval or gewijzigd_l or toetsen:
             try:
                 from rooster_kaart import teken_kaart
-                _, week_nu, _ = nu.isocalendar()
-                bijlage = teken_kaart(winst, verschuivingen, bosses, week_nu,
+                datumtekst = f"{DAGNAMEN[nu.weekday()]} {nu.day} {MAANDEN[nu.month - 1]}"
+                bijlage = teken_kaart(blok, uitval, gewijzigd_l, toetsen, datumtekst,
                                       os.path.join(_HERE, "kaart.png"))
-                kop = kaartkop(winst, bosses)
+                kop = kaartkop(blok)
                 print(f"kaart: {bijlage}")
             except Exception as err:
                 # Een mislukte kaart mag de melding zelf nooit tegenhouden.

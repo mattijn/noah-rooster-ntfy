@@ -1,230 +1,174 @@
 #!/usr/bin/env python3
-"""Teken roosterwijzigingen als 'patch notes'-kaart voor in de melding.
+"""Teken de roosterkaart voor in de melding: een compacte, lichte kaart op
+telefoonbreedte.
 
-Niet het rooster zelf: dat kent hij al. Alleen wat er verandert, in de taal van
-een game-update. Uitval is buit, een toets is een boss met een aftelteller, en
-er zit elke dag een andere challenge in zodat het de moeite blijft om te kijken.
+Bovenaan staat waar het om draait: hoe laat je moet beginnen. Daaronder de
+uitval (met wat het betekent: later starten, tussenuur, of eerder klaar), de
+gewijzigde lessen (met het nieuwe lokaal of tijdstip voorop) en de toetsen met
+een aftelling.
 
-Opgebouwd als HTML en met headless Chrome naar PNG geschreven. Dat is makkelijker
-te vormgeven dan pixels tekenen, en je krijgt kleuren-emoji gratis. Chrome staat
-zowel op de Mac als op een GitHub-runner al geinstalleerd; Playwright gebruikt
-die via channel="chrome" en hoeft er dus geen te downloaden.
+Opgebouwd als HTML en met headless Chrome naar PNG geschreven. Chrome staat
+zowel op macOS als op een GitHub-runner al klaar; Playwright gebruikt die via
+channel="chrome" en hoeft er dus geen te downloaden.
 """
 
 from __future__ import annotations
 
-import datetime as dt
 import html
 import os
-import random
 import tempfile
 
-BREEDTE = 880
+from vakiconen import icoon_voor
 
-# --- willekeur --------------------------------------------------------------
-# Eén regel commentaar en één challenge per dag; het zaad is de datum, dus
-# binnen een dag blijft het gelijk maar morgen is het weer anders.
-FLAVOUR = [
-    "De roostergoden hebben gesproken.",
-    "Ergens huilt een docent. Niet jouw probleem.",
-    "Dit stond niet in de patch notes van vorige week.",
-    "Rooster.exe heeft iets doms gedaan.",
-    "Kans dat dit morgen weer anders is: aanzienlijk.",
-    "Zelfs de conciërge wist dit nog niet.",
-    "Screenshot dit voordat het weer wijzigt.",
-    "Deze update is niet getest door de school.",
-]
+BREEDTE = 400  # css-punten: ongeveer de breedte van een melding op een telefoon
+SCHAAL = 3     # retina
 
-CHALLENGES = [
-    "Zeg vandaag drie keer 'uiteraard' tegen een docent.",
-    "Tel hoe vaak iemand 'even snel' zegt in de les.",
-    "Schrijf je aantekeningen vandaag in hoofdletters. Alles.",
-    "Wees de eerste die in het lokaal zit. Zeg er niets over.",
-    "Leer één woord Duits dat je nooit nodig hebt.",
-    "Zoek uit wat het oudste ding in je klaslokaal is.",
-    "Maak vandaag een aantekening die je morgen nog snapt.",
-    "Vraag een docent wat zijn eerste baan was.",
-    "Onthoud het lokaalnummer van al je lessen. Zonder kijken.",
-    "Doe vandaag alsof je rugzak zwaarder is dan hij is.",
-    "Bedenk een betere naam voor het vak 'samen2'.",
-    "Tel je stappen tussen het eerste en het laatste lokaal.",
-]
+# Zachte vlakken met een donkere lijn erop, stabiel per vak verdeeld over het
+# palet (geen hash: die liet de helft op dezelfde kleur uitkomen).
+PALET = [("#e8f0fb", "#2c5f9e"), ("#fdeef0", "#a83a52"), ("#eaf6ed", "#2f6b42"),
+         ("#fdf3e3", "#9a6415"), ("#f1ecfb", "#5b3fa8"), ("#e6f5f5", "#186a6a"),
+         ("#fbeef7", "#96336f")]
 
-VAK_EMOJI = [
-    ("wiskund", "📐"), ("nederland", "📖"), ("engel", "🇬🇧"), ("duits", "🥨"),
-    ("frans", "🥐"), ("biolog", "🧬"), ("aardrijk", "🌍"), ("geschied", "🏛️"),
-    ("muziek", "🎵"), ("drama", "🎭"), ("handvaardig", "✂️"), ("tekenen", "🎨"),
-    ("techn", "🔧"), ("godsdienst", "🕯️"), ("lichamelijke", "🏃"), ("mentor", "🧭"),
-    ("natuur", "🔬"), ("schei", "⚗️"), ("gym", "🏃"), ("zorg", "🩹"),
-]
+VOLGORDE = ["nederlandse taal", "engelse taal", "duitse taal", "franse taal",
+            "wiskunde", "biologie", "aardrijkskunde", "geschiedenis", "godsdienst",
+            "muziek", "drama", "handvaardigheid", "techniek",
+            "lichamelijke opvoeding", "mentor uur", "samen2", "kwt"]
 
 
-def _emoji(vak: str) -> str:
-    k = (vak or "").lower()
-    for sleutel, teken in VAK_EMOJI:
-        if sleutel in k:
-            return teken
-    return "📚"
+def kleur(vak: str) -> tuple[str, str]:
+    k = (vak or "").lower().strip()
+    i = VOLGORDE.index(k) if k in VOLGORDE else sum(map(ord, k))
+    return PALET[i % len(PALET)]
 
 
-RANGEN = [(220, "LEGENDARY", "#c6f24e"), (120, "EPIC", "#f24e9e"),
-          (60, "RARE", "#4ee1f2"), (0, "COMMON", "#8a92a0")]
+CSS = """
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:%dpx;background:#fcfcfa;color:#17191d;padding:18px 16px 20px;
+ font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.kop{display:flex;justify-content:space-between;align-items:baseline;
+ padding-bottom:11px;border-bottom:1.5px solid #e7e6e1}
+.kop b{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.kop span{font-size:12px;color:#8e8e86;font-weight:600}
+
+.start{margin-top:14px;border:1.5px solid;border-radius:16px;padding:14px 16px 15px}
+.start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800}
+.start .tijd{font-size:52px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin-top:2px}
+.start .les{font-size:13.5px;margin-top:3px}
+.start .reden{display:inline-block;margin-top:9px;font-size:12.5px;font-weight:700;
+ color:#a8481f;background:#fbeee6;border-radius:8px;padding:5px 10px}
+.gewoon{background:#f4f6f8;border-color:#e0e4e8}
+.gewoon .label{color:#5a6673} .gewoon .tijd{color:#1a2027} .gewoon .les{color:#5f6a75}
+.later{background:#f2f6ee;border-color:#dae5cd}
+.later .label{color:#5f7a49} .later .tijd{color:#1d2a15} .later .les{color:#617054}
+.eerder{background:#fdf2ec;border-color:#f2d7c4}
+.eerder .label{color:#a8481f} .eerder .tijd{color:#3a1d0f} .eerder .les{color:#8a5c3f}
+
+h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16px 0 4px}
+.rij{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #f1f0ec}
+.rij:last-child{border-bottom:none}
+.chip{width:36px;height:36px;border-radius:11px;flex:none;display:flex;
+ align-items:center;justify-content:center}
+.chip svg{width:19px;height:19px}
+.mid{flex:1;min-width:0}
+.vak{font-size:16.5px;font-weight:650;line-height:1.2;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis}
+.sub{font-size:12.5px;color:#84847c;margin-top:2px;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis}
+.rechts{text-align:right;white-space:nowrap;flex:none;padding-left:6px}
+.rechts .groot{font-size:15px;font-weight:800;line-height:1.15}
+.rechts .was{font-size:12px;color:#a6a69e;text-decoration:line-through;display:block;margin-top:1px}
+.rechts .klok{font-size:13px;color:#6b6b63;font-weight:700;display:block;margin-top:1px}
+.uitval .vak{color:#8c8c84;text-decoration:line-through;
+ text-decoration-color:#cf4d42;text-decoration-thickness:2px}
+.tijdwinst{color:#2f6b42} .gat{color:#8a8a82}
+.d0{color:#cf4d42} .d1{color:#b3720f} .dv{color:#5f5f58}
+""" % BREEDTE
 
 
-def _rang(minuten: int) -> tuple[str, str]:
-    for drempel, naam, kleur in RANGEN:
-        if minuten >= drempel:
-            return naam, kleur
-    return RANGEN[-1][1], RANGEN[-1][2]
+def _chip(vak: str) -> str:
+    bg, fg = kleur(vak)
+    svg = (f'<svg viewBox="0 0 24 24" fill="none" stroke="{fg}" stroke-width="2" '
+           f'stroke-linecap="round" stroke-linejoin="round">{icoon_voor(vak)}</svg>')
+    return f'<div class="chip" style="background:{bg}">{svg}</div>'
 
 
-def _aftel(dagen: int) -> str:
+def _rij(vak: str, sub: str, rechts: str, klasse: str = "") -> str:
+    return (f'<div class="rij {klasse}">{_chip(vak)}<div class="mid">'
+            f'<div class="vak">{html.escape(vak)}</div>'
+            f'<div class="sub">{html.escape(sub)}</div></div>'
+            f'<div class="rechts">{rechts}</div></div>')
+
+
+def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
+              vandaag: str) -> str:
+    d = [f'<div class="kop"><b>Rooster</b><span>{html.escape(vandaag)}</span></div>']
+
+    if start:
+        if start.get("geen_les"):
+            d.append(f'<div class="start later"><div class="label">'
+                     f'{start["dag"].upper()}</div><div class="tijd">geen les</div></div>')
+        else:
+            reden = (f'<div class="reden">{html.escape(start["reden"])}</div>'
+                     if start.get("reden") else "")
+            les = f'{start["uur"]}e uur · {start["vak"]}'
+            if start.get("lokaal"):
+                les += f' · {start["lokaal"]}'
+            d.append(f'<div class="start {start.get("soort", "gewoon")}">'
+                     f'<div class="label">{start["dag"].upper()} BEGIN JE OM</div>'
+                     f'<div class="tijd">{start["tijd"]}</div>'
+                     f'<div class="les">{html.escape(les)}</div>{reden}</div>')
+
+    if uitval:
+        d.append("<h2>UITVAL</h2>")
+        for v in uitval:
+            # Een tussenuur betekent niet naar huis: alleen het eerste en het
+            # laatste uur veranderen wanneer hij komt of gaat.
+            kl = "gat" if v["positie"] == "midden" else "tijdwinst"
+            klok = (f'<span class="klok">{html.escape(v["klok"])}</span>'
+                    if v.get("klok") else "")
+            d.append(_rij(v["vak"], f'{v["dag"]} {v["uur"]}e · {v["tijd"]}',
+                          f'<span class="groot {kl}">{html.escape(v["gevolg"])}</span>{klok}',
+                          "uitval"))
+
+    if gewijzigd:
+        d.append("<h2>GEWIJZIGD</h2>")
+        for v in gewijzigd:
+            was = f'<span class="was">{html.escape(v["was"])}</span>' if v.get("was") else ""
+            d.append(_rij(v["vak"], f'{v["label"]} · {v["dag"]} {v["uur"]}e',
+                          f'<span class="groot">{html.escape(v["nu"])}</span>{was}'))
+
+    if toetsen:
+        d.append("<h2>TOETSEN</h2>")
+        for t in toetsen:
+            k = "d0" if t["dagen"] == 0 else ("d1" if t["dagen"] == 1 else "dv")
+            d.append(_rij(t["vak"], t["wat"],
+                          f'<span class="groot {k}">{aftel(t["dagen"])}</span>'))
+
+    return (f"<!doctype html><meta charset='utf-8'><style>{CSS}</style>"
+            f"<body>{''.join(d)}</body>")
+
+
+def aftel(dagen: int) -> str:
     return {0: "VANDAAG", 1: "MORGEN"}.get(dagen, f"{dagen} DAGEN")
 
 
-# --- html -------------------------------------------------------------------
-CSS = """
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  width:880px; background:#0d0f14; color:#f3f5f8;
-  font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;
-}
-.kaart { padding:40px 44px 36px; position:relative; overflow:hidden; }
-.gloed { position:absolute; top:-260px; right:-160px; width:560px; height:560px;
-  background:radial-gradient(circle,rgba(198,242,78,.16),transparent 65%); }
-.kop { display:flex; align-items:baseline; justify-content:space-between;
-  border-bottom:2px solid #202630; padding-bottom:16px; margin-bottom:26px;
-  position:relative; }
-.kop h1 { font-size:25px; letter-spacing:.14em; font-weight:800; }
-.kop .versie { font-size:19px; color:#6e7686; font-weight:700;
-  font-variant-numeric:tabular-nums; }
-
-.held { background:linear-gradient(135deg,#1a2410,#171b23 60%);
-  border:1px solid #2c3a18; border-radius:22px; padding:26px 30px 24px;
-  margin-bottom:26px; position:relative; }
-.badge { display:inline-block; font-size:13px; font-weight:800; letter-spacing:.12em;
-  padding:6px 13px; border-radius:20px; color:#0d0f14; }
-.held .cijfer { font-size:92px; font-weight:800; line-height:1.05; margin-top:10px;
-  background:linear-gradient(92deg,#c6f24e,#4ee1f2); -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent; letter-spacing:-.03em; }
-.held .cijfer small { font-size:40px; font-weight:800; letter-spacing:0; }
-.held .wat { color:#9aa3b2; font-size:19px; margin-top:8px; line-height:1.5; }
-
-h2 { font-size:13px; letter-spacing:.18em; color:#6e7686; font-weight:800;
-  margin:0 0 12px 2px; }
-.rij { display:flex; align-items:center; gap:16px; background:#171b23;
-  border-radius:14px; padding:14px 20px; margin-bottom:10px;
-  border-left:5px solid #8a92a0; }
-.rij .ikoon { font-size:26px; width:32px; text-align:center; }
-.rij .mid { flex:1; min-width:0; }
-.rij .titel { font-size:21px; font-weight:700; }
-.rij .sub { font-size:15px; color:#8a92a0; margin-top:3px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.rij .rechts { font-size:16px; font-weight:700; text-align:right; white-space:nowrap; }
-
-.boss .tel { font-size:30px; font-weight:800; letter-spacing:-.01em; }
-.balk { height:5px; border-radius:3px; background:#232935; margin-top:8px;
-  width:150px; margin-left:auto; overflow:hidden; }
-.balk span { display:block; height:100%; border-radius:3px; }
-
-.voet { border-top:2px solid #202630; margin-top:26px; padding-top:20px; }
-.voet .flavour { color:#6e7686; font-size:16px; font-style:italic; }
-.uitdaging { display:flex; gap:14px; align-items:center; margin-top:16px;
-  background:#141821; border:1px dashed #2b3240; border-radius:14px; padding:14px 18px; }
-.uitdaging .dobbel { font-size:24px; }
-.uitdaging .tekst { font-size:16px; color:#c3cad6; }
-.uitdaging .tekst b { display:block; font-size:12px; letter-spacing:.16em;
-  color:#6e7686; margin-bottom:3px; }
-"""
-
-
-def _rij(ikoon: str, titel: str, sub: str, rechts: str, kleur: str,
-         extra: str = "", klasse: str = "") -> str:
-    return f"""<div class="rij {klasse}" style="border-left-color:{kleur}">
-  <div class="ikoon">{ikoon}</div>
-  <div class="mid">
-    <div class="titel">{html.escape(titel)}</div>
-    <div class="sub">{html.escape(sub)}</div>
-  </div>
-  <div class="rechts" style="color:{kleur}">{rechts}{extra}</div>
-</div>"""
-
-
-def bouw_html(winst, verschuivingen, bosses, week, rnd) -> str:
-    minuten = sum(w.get("minuten", 50) for w in winst)
-    rang, rangkleur = _rang(minuten)
-    delen = [f'<div class="kaart"><div class="gloed"></div>',
-             f'<div class="kop"><h1>ROOSTER UPDATE</h1>'
-             f'<div class="versie">week {week} · v{rnd.randint(1, 9)}</div></div>']
-
-    if winst:
-        vakken = " · ".join(f"{_emoji(w['vak'])} {w['vak']} {w['wanneer']}" for w in winst[:4])
-        if len(winst) > 4:
-            vakken += f" · +{len(winst) - 4}"
-        delen.append(f"""<div class="held">
-  <span class="badge" style="background:{rangkleur}">{rang} DROP</span>
-  <div class="cijfer">+{minuten}<small> MIN</small></div>
-  <div class="wat">{html.escape(vakken)}</div>
-</div>""")
-
-    if verschuivingen:
-        delen.append("<h2>GEWIJZIGD</h2>")
-        for v in verschuivingen:
-            delen.append(_rij(_emoji(v["vak"]), v["vak"], v["wanneer"],
-                              html.escape(v["wat"]), "#f2b04e"))
-
-    if bosses:
-        delen.append("<h2>INCOMING</h2>")
-        for b in bosses:
-            kleur = "#f2564e" if b["toets"] else "#4ee1f2"
-            label = "🔥 BOSS" if b["toets"] else "📌 QUEST"
-            # Hoe dichterbij, hoe voller de balk.
-            vol = max(6, min(100, int(100 - (b["dagen"] / 14) * 100)))
-            balk = (f'<div class="balk"><span style="width:{vol}%;'
-                    f'background:{kleur}"></span></div>')
-            delen.append(_rij(label.split()[0], b["vak"],
-                              f"{label.split()[1]} · {b['onderwerp']}",
-                              f'<div class="tel">{_aftel(b["dagen"])}</div>',
-                              kleur, balk, "boss"))
-
-    delen.append(f"""<div class="voet">
-  <div class="flavour">{html.escape(rnd.choice(FLAVOUR))}</div>
-  <div class="uitdaging"><div class="dobbel">🎲</div>
-    <div class="tekst"><b>CHALLENGE VAN DE DAG</b>{html.escape(rnd.choice(CHALLENGES))}</div>
-  </div>
-</div></div>""")
-
-    return (f"<!doctype html><meta charset='utf-8'><style>{CSS}</style>"
-            f"<body>{''.join(delen)}</body>")
-
-
-# --- naar png ---------------------------------------------------------------
-def teken_kaart(winst, verschuivingen, bosses, week, uitvoer, zaad=None) -> str:
-    """Render de kaart naar PNG. Geeft het pad terug.
-
-    winst          lessen die vervallen: {"vak", "wanneer", "minuten"}
-    verschuivingen overige wijzigingen:  {"vak", "wanneer", "wat"}
-    bosses         toetsen/huiswerk:     {"vak", "onderwerp", "dagen", "toets"}
-    """
+def teken_kaart(start, uitval, gewijzigd, toetsen, vandaag, uitvoer) -> str:
+    """Render de kaart naar PNG en geef het pad terug."""
     from playwright.sync_api import sync_playwright
 
-    rnd = random.Random(zaad or dt.date.today().isoformat())
-    doc = bouw_html(winst, verschuivingen, bosses, week, rnd)
-
+    doc = bouw_html(start, uitval, gewijzigd, toetsen, vandaag)
     with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
                                      encoding="utf-8") as fh:
         fh.write(doc)
         pad = fh.name
     try:
         with sync_playwright() as pw:
-            # Systeem-Chrome; valt terug op een meegeleverde chromium.
             try:
                 browser = pw.chromium.launch(channel="chrome")
             except Exception:
                 browser = pw.chromium.launch()
             pagina = browser.new_page(viewport={"width": BREEDTE, "height": 600},
-                                      device_scale_factor=2)
+                                      device_scale_factor=SCHAAL)
             pagina.goto(f"file://{pad}")
             pagina.screenshot(path=uitvoer, full_page=True)
             browser.close()
@@ -233,20 +177,26 @@ def teken_kaart(winst, verschuivingen, bosses, week, uitvoer, zaad=None) -> str:
     return uitvoer
 
 
+# Demo-data, zodat de opmaak los van de API te renderen is (zie kaart-test.yml).
 DEMO = dict(
-    winst=[{"vak": "techniek", "wanneer": "di 2e", "minuten": 60},
-           {"vak": "muziek", "wanneer": "wo 5e", "minuten": 60},
-           {"vak": "mentor", "wanneer": "vr 2e", "minuten": 60},
-           {"vak": "lichamelijke opvoeding", "wanneer": "vr 6e", "minuten": 60}],
-    verschuivingen=[{"vak": "aardrijkskunde", "wanneer": "di 3e uur", "wat": "lokaal was zh104"},
-                    {"vak": "godsdienst", "wanneer": "ma 5e uur", "wat": "verplaatst van 13:55"}],
-    bosses=[{"vak": "handvaardigheid", "onderwerp": "Toets theorie: Vorm", "dagen": 0, "toets": True},
-            {"vak": "Duitse taal", "onderwerp": "Mini SO", "dagen": 1, "toets": False},
-            {"vak": "wiskunde", "onderwerp": "Toets hoofdstuk 1", "dagen": 8, "toets": True}],
-    week=38)
+    start={"dag": "morgen", "soort": "later", "reden": "1e uur vervalt",
+           "tijd": "10:10", "uur": 2, "vak": "wiskunde", "lokaal": "zf101"},
+    uitval=[{"vak": "handvaardigheid", "dag": "do", "uur": 1, "tijd": "09:00",
+             "gevolg": "later beginnen", "klok": "10:10", "positie": "rand"},
+            {"vak": "muziek", "dag": "wo", "uur": 5, "tijd": "13:55",
+             "gevolg": "tussenuur", "klok": "", "positie": "midden"},
+            {"vak": "lichamelijke opvoeding", "dag": "vr", "uur": 6, "tijd": "15:00",
+             "gevolg": "eerder uit", "klok": "14:55", "positie": "rand"}],
+    gewijzigd=[{"vak": "aardrijkskunde", "dag": "di", "uur": 3, "tijd": "11:30",
+                "label": "ander lokaal", "nu": "zh005", "was": "zh104"},
+               {"vak": "godsdienst", "dag": "ma", "uur": 5, "tijd": "13:15",
+                "label": "verplaatst", "nu": "13:15", "was": "13:55"}],
+    toetsen=[{"vak": "handvaardigheid", "wat": "Toets theorie: Vorm", "dagen": 0},
+             {"vak": "Duitse taal", "wat": "Mini SO", "dagen": 1},
+             {"vak": "wiskunde", "wat": "Toets hoofdstuk 1", "dagen": 8}],
+    vandaag="di 15 sep")
 
 if __name__ == "__main__":
     import sys
-    pad = teken_kaart(**DEMO, uitvoer=(sys.argv[1] if len(sys.argv) > 1 else "kaart.png"),
-                      zaad="demo-3")
+    pad = teken_kaart(**DEMO, uitvoer=(sys.argv[1] if len(sys.argv) > 1 else "kaart.png"))
     print(f"{pad} ({os.path.getsize(pad)} bytes)")
