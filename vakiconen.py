@@ -92,3 +92,13 @@ def roepnaam(vak: str) -> str:
         woord = k[:-5].strip()
         return woord[:-1] if woord.endswith("e") else woord
     return k
+
+
+def klein(tekst: str) -> str:
+    """Alles in kleine letters, behalve afkortingen als SO, KWT of PWS.
+
+    Een woord dat helemaal uit hoofdletters bestaat blijft staan; dat is bijna
+    altijd een afkorting die je niet moet verbouwen.
+    """
+    return " ".join(w if (len(w) >= 2 and w.isalpha() and w.isupper()) else w.lower()
+                    for w in (tekst or "").split())

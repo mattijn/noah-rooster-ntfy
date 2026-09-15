@@ -18,7 +18,7 @@ import html
 import os
 import tempfile
 
-from vakiconen import icoon_voor, roepnaam
+from vakiconen import icoon_voor, klein, roepnaam
 
 BREEDTE = 400  # css-punten: ongeveer de breedte van een melding op een telefoon
 SCHAAL = 3     # retina
@@ -86,16 +86,6 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 .tijdwinst{color:#17191d} .gat{color:#8a8a82}
 .d0{color:#17191d} .d1{color:#3f3f3a} .dv{color:#8a8a82}
 """ % BREEDTE
-
-
-def klein(tekst: str) -> str:
-    """Alles in kleine letters, behalve afkortingen als SO, KWT of PWS.
-
-    Een woord dat helemaal uit hoofdletters bestaat blijft staan; dat is bijna
-    altijd een afkorting die je niet moet verbouwen.
-    """
-    return " ".join(w if (len(w) >= 2 and w.isalpha() and w.isupper()) else w.lower()
-                    for w in (tekst or "").split())
 
 
 def _chip(vak: str) -> str:

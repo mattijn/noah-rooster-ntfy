@@ -37,7 +37,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from vakiconen import roepnaam
+from vakiconen import klein, roepnaam
 
 # --- constanten (zelfde publieke app-client als de Somtoday-app) ------------
 AUTHORIZE_URL = "https://inloggen.somtoday.nl/oauth2/authorize"
@@ -472,69 +472,70 @@ GEVOLGD = {
 
 
 def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime) -> list[str]:
-    """Beschrijf wat er veranderd is, beperkt tot lessen die voor 'tot' beginnen."""
+    """Beschrijf wat er veranderd is, in de taal van de melding zelf.
+
+    Regels zien eruit als "wiskunde vervalt (donderdag, 2e uur)": eerst het
+    vak, dan wat ermee gebeurt, en tussen haakjes waar je het terugvindt.
+    """
     regels: list[str] = []
 
     def binnen(begin: str | None) -> bool:
-        if not begin:
-            return False
-        try:
-            return dt.datetime.fromisoformat(begin[:19]) <= tot
-        except ValueError:
-            return False
+        wanneer = _tijdstip(begin)
+        return bool(wanneer) and wanneer <= tot
 
-    def wanneer(rec: dict) -> str:
-        begin = rec.get("begin") or rec.get("datumTijd") or ""
-        try:
-            d = dt.datetime.fromisoformat(begin[:19])
-        except ValueError:
-            return begin[:16]
-        dagen = ["ma", "di", "wo", "do", "vr", "za", "zo"]
-        return f"{dagen[d.weekday()]} {d:%d-%m %H:%M}"
+    def plek(rec: dict) -> str:
+        wanneer = _tijdstip(rec.get("begin") or rec.get("datumTijd"))
+        if not wanneer:
+            return ""
+        delen = [VOLLE_DAGNAMEN[wanneer.weekday()]]
+        if rec.get("lesuur"):
+            delen.append(f"{rec['lesuur']}e uur")
+        return f" ({', '.join(delen)})"
 
     oude_lessen, nieuwe_lessen = oud.get("lessen", {}), nieuw.get("lessen", {})
     for sleutel, na in nieuwe_lessen.items():
         if not binnen(na.get("begin")):
             continue
+        vak = roepnaam(na.get("vak") or "?")
         voor = oude_lessen.get(sleutel)
         if voor is None:
-            regels.append(f"NIEUW  {wanneer(na)} uur {na['lesuur']} {na['vak']}"
-                          + (f" - {na['wijziging']}" if na["wijziging"] else ""))
+            regels.append(f"{vak} erbij{plek(na)}")
             continue
-        waar = f"{wanneer(na)} uur {na['lesuur']} {na['vak']}"
-        for veld, label in GEVOLGD.items():
+        for veld in GEVOLGD:
             if voor.get(veld) == na.get(veld):
                 continue
             if veld == "vak" and (_is_vakcode(voor.get("vak")) or _is_vakcode(na.get("vak"))):
-                # Een afkorting die door vul_vaknamen is aangevuld (of juist niet
-                # opgelost kon worden) is geen vakwissel. Zonder dit meldt hij
-                # "vak mu wordt muziek".
                 continue
-            was, wordt = voor.get(veld) or "-", na.get(veld) or "-"
+            was, wordt = voor.get(veld) or "", na.get(veld) or ""
             if veld == "wijziging":
-                # De API schrijft hier hele zinnen ("Les vervalt", "De les is
-                # verplaatst (komt van ma 9:00u)."); die lezen prima als melding.
-                if not wordt or wordt == "-":
-                    regels.append(f"HERSTELD  {waar} - {was.rstrip('.')} geldt niet meer")
+                if not wordt:
+                    regels.append(f"{vak} gaat toch door{plek(na)}")
                 elif "vervalt" in wordt.lower():
-                    regels.append(f"VERVALT  {waar}")
+                    regels.append(f"{vak} vervalt{plek(na)}")
                 else:
-                    regels.append(f"LET OP  {waar} - {wordt.rstrip('.')}")
+                    regels.append(f"{vak}: {klein(wordt.rstrip('.'))}{plek(na)}")
             elif veld == "begin":
-                regels.append(f"VERZET  {waar} - was {str(was)[11:16]}, wordt {str(wordt)[11:16]}")
+                regels.append(f"{vak} begint om {str(wordt)[11:16]}{plek(na)}")
+            elif veld == "lokaal":
+                regels.append(f"{vak} in {wordt}{plek(na)}")
+            elif veld == "docent":
+                regels.append(f"{vak} met {klein(wordt)}{plek(na)}")
             else:
-                regels.append(f"LET OP  {waar} - {label} {was} wordt {wordt}")
+                regels.append(f"{vak}: {was} wordt {wordt}{plek(na)}")
 
     for sleutel, voor in oude_lessen.items():
         if binnen(voor.get("begin")) and sleutel not in nieuwe_lessen:
-            regels.append(f"WEG  {wanneer(voor)} uur {voor['lesuur']} {voor['vak']}"
-                          " - staat niet meer in het rooster")
+            regels.append(f"{roepnaam(voor.get('vak') or '?')} weg uit het rooster{plek(voor)}")
 
     oud_werk, nieuw_werk = oud.get("huiswerk", {}), nieuw.get("huiswerk", {})
     for sleutel, na in nieuw_werk.items():
-        if sleutel not in oud_werk and binnen(na.get("datumTijd")):
-            soort = "TOETS" if na.get("type") in ("TOETS", "GROTE_TOETS") else "huiswerk"
-            regels.append(f"NIEUW {soort}  {wanneer(na)} - {na['onderwerp']}")
+        if sleutel in oud_werk or not binnen(na.get("datumTijd")):
+            continue
+        is_toets, merk = toetssoort(na.get("onderwerp"), na.get("type"))
+        soort = "toets" if is_toets else "huiswerk"
+        merking = f" ({merk})" if merk else ""
+        regels.append(f"nieuwe {soort}{merking}: {roepnaam(na.get('vak') or '?')}"
+                      f" - {klein(na.get('onderwerp') or '')}{plek(na)}")
     return regels
 
 
@@ -896,8 +897,8 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
 
     regels: list[str] = []
     if wijzigingen:
-        regels += [w.lower() for w in wijzigingen]
-        regels.append("")
+        regels.append("gewijzigd")
+        regels += [f"* {w}" for w in wijzigingen]
 
     per_dag: dict[str, list[str]] = {}
     for t in toetsen:
