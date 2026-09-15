@@ -67,9 +67,11 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 .rij{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #f1f0ec}
 .rij:last-child{border-bottom:none}
 .chip{width:36px;height:36px;border-radius:11px;flex:none;display:flex;
- align-items:center;justify-content:center}
+ align-items:center;justify-content:center;position:relative;overflow:hidden}
+.chip .vulling{position:absolute;inset:0;display:flex;align-items:center;
+ justify-content:center}
 .chip svg{width:19px;height:19px}
-.chip.vlag{box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.chip{box-shadow:inset 0 0 0 1px rgba(0,0,0,.10)}
 .mid{flex:1;min-width:0}
 .vak{font-size:16.5px;font-weight:650;line-height:1.2;white-space:nowrap;
  overflow:hidden;text-overflow:ellipsis}
@@ -109,10 +111,20 @@ VLAGGEN = {
 def _chip(vak: str) -> str:
     if vlag := VLAGGEN.get(roepnaam(vak)):
         return f'<div class="chip vlag" style="background:{vlag}"></div>'
-    bg, fg = kleur(vak)
-    svg = (f'<svg viewBox="0 0 24 24" fill="none" stroke="{fg}" stroke-width="2" '
-           f'stroke-linecap="round" stroke-linejoin="round">{icoon_voor(vak)}</svg>')
-    return f'<div class="chip" style="background:{bg}">{svg}</div>'
+    # Een vlag vult het hele blokje; een klein icoon op een kleurvlak deed dat
+    # niet. Daarom een grote, vervaagde versie van hetzelfde icoon als vulling,
+    # met het scherpe icoon eroverheen zodat je nog ziet wat het is.
+    _, fg = kleur(vak)
+    vorm = icoon_voor(vak)
+
+    def teken(grootte: float, dikte: float, dekking: float) -> str:
+        return (f'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" '
+                f'stroke-width="{dikte}" stroke-linecap="round" stroke-linejoin="round" '
+                f'style="width:{grootte}px;height:{grootte}px;opacity:{dekking}">{vorm}</svg>')
+
+    return (f'<div class="chip" style="background:{fg}">'
+            f'<div class="vulling">{teken(56, 1.4, .32)}</div>'
+            f'{teken(16, 2.2, 1)}</div>')
 
 
 def _rij(vak: str, sub: str, rechts: str, klasse: str = "") -> str:
