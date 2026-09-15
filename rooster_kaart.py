@@ -50,18 +50,18 @@ body{width:%dpx;background:#fcfcfa;color:#17191d;padding:18px 16px 20px;
 .kop b{font-size:18px;font-weight:800;letter-spacing:-.01em}
 .kop span{font-size:12px;color:#8e8e86;font-weight:600}
 
-.start{margin-top:14px;border:1.5px solid;border-radius:16px;padding:14px 16px 15px}
-.start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800}
-.start .tijd{font-size:52px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin-top:2px}
-.start .les{font-size:13.5px;margin-top:3px}
-.start .reden{display:inline-block;margin-top:9px;font-size:12.5px;font-weight:700;
+.start{margin-top:14px;border:1.5px solid #e0e4e8;background:#f4f6f8;
+ border-radius:16px;padding:13px 16px 14px}
+.start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#6a7280}
+/* Twee kolommen: de tijd links, de details ernaast. Onder elkaar bleef er
+   een halve kaart wit over. */
+.start .rij2{display:flex;align-items:center;gap:14px;margin-top:3px}
+.start .tijd{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1;
+ color:#17191d;flex:none}
+.start .les{font-size:13px;color:#5f6a75;line-height:1.45;min-width:0}
+.start .les b{display:block;font-weight:700;color:#3a4049;font-size:14px}
+.start .reden{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:700;
  color:#a8481f;background:#fbeee6;border-radius:8px;padding:5px 10px}
-.gewoon{background:#f4f6f8;border-color:#e0e4e8}
-.gewoon .label{color:#5a6673} .gewoon .tijd{color:#1a2027} .gewoon .les{color:#5f6a75}
-.later{background:#f2f6ee;border-color:#dae5cd}
-.later .label{color:#5f7a49} .later .tijd{color:#1d2a15} .later .les{color:#617054}
-.eerder{background:#fdf2ec;border-color:#f2d7c4}
-.eerder .label{color:#a8481f} .eerder .tijd{color:#3a1d0f} .eerder .les{color:#8a5c3f}
 
 h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16px 0 4px}
 .rij{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #f1f0ec}
@@ -78,11 +78,24 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 .rechts .groot{font-size:15px;font-weight:800;line-height:1.15}
 .rechts .was{font-size:12px;color:#a6a69e;text-decoration:line-through;display:block;margin-top:1px}
 .rechts .klok{font-size:13px;color:#6b6b63;font-weight:700;display:block;margin-top:1px}
+.rechts .voor{font-size:11.5px;color:#9a9a92;font-weight:700;display:block;
+ letter-spacing:.02em;margin-bottom:1px}
+.rechts .tel{font-size:11.5px;color:#9a9a92;font-weight:700;display:block;margin-top:1px}
 .uitval .vak{color:#8c8c84;text-decoration:line-through;
  text-decoration-color:#cf4d42;text-decoration-thickness:2px}
-.tijdwinst{color:#2f6b42} .gat{color:#8a8a82}
-.d0{color:#cf4d42} .d1{color:#b3720f} .dv{color:#5f5f58}
+.tijdwinst{color:#17191d} .gat{color:#8a8a82}
+.d0{color:#17191d} .d1{color:#3f3f3a} .dv{color:#8a8a82}
 """ % BREEDTE
+
+
+def klein(tekst: str) -> str:
+    """Alles in kleine letters, behalve afkortingen als SO, KWT of PWS.
+
+    Een woord dat helemaal uit hoofdletters bestaat blijft staan; dat is bijna
+    altijd een afkorting die je niet moet verbouwen.
+    """
+    return " ".join(w if (len(w) >= 2 and w.isalpha() and w.isupper()) else w.lower()
+                    for w in (tekst or "").split())
 
 
 def _chip(vak: str) -> str:
@@ -94,32 +107,32 @@ def _chip(vak: str) -> str:
 
 def _rij(vak: str, sub: str, rechts: str, klasse: str = "") -> str:
     return (f'<div class="rij {klasse}">{_chip(vak)}<div class="mid">'
-            f'<div class="vak">{html.escape(vak)}</div>'
-            f'<div class="sub">{html.escape(sub)}</div></div>'
+            f'<div class="vak">{html.escape(klein(vak))}</div>'
+            f'<div class="sub">{html.escape(klein(sub))}</div></div>'
             f'<div class="rechts">{rechts}</div></div>')
 
 
 def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
               vandaag: str) -> str:
-    d = [f'<div class="kop"><b>Rooster</b><span>{html.escape(vandaag)}</span></div>']
+    d = [f'<div class="kop"><b>rooster</b><span>{html.escape(klein(vandaag))}</span></div>']
 
     if start:
         if start.get("geen_les"):
-            d.append(f'<div class="start later"><div class="label">'
-                     f'{start["dag"].upper()}</div><div class="tijd">geen les</div></div>')
+            d.append(f'<div class="start"><div class="label">'
+                     f'{klein(start["dag"])}</div>'
+                     f'<div class="rij2"><div class="tijd">geen les</div></div></div>')
         else:
-            reden = (f'<div class="reden">{html.escape(start["reden"])}</div>'
+            reden = (f'<div class="reden">{html.escape(klein(start["reden"]))}</div>'
                      if start.get("reden") else "")
-            les = f'{start["uur"]}e uur · {start["vak"]}'
-            if start.get("lokaal"):
-                les += f' · {start["lokaal"]}'
-            d.append(f'<div class="start {start.get("soort", "gewoon")}">'
-                     f'<div class="label">{start["dag"].upper()} BEGIN JE OM</div>'
-                     f'<div class="tijd">{start["tijd"]}</div>'
-                     f'<div class="les">{html.escape(les)}</div>{reden}</div>')
+            lokaal = f' · {start["lokaal"]}' if start.get("lokaal") else ""
+            d.append(f'<div class="start">'
+                     f'<div class="label">{klein(start["dag"])} begin je om</div>'
+                     f'<div class="rij2"><div class="tijd">{start["tijd"]}</div>'
+                     f'<div class="les"><b>{html.escape(klein(start["vak"] or ""))}</b>'
+                     f'{start["uur"]}e uur{html.escape(lokaal)}</div></div>{reden}</div>')
 
     if uitval:
-        d.append("<h2>UITVAL</h2>")
+        d.append("<h2>uitval</h2>")
         for v in uitval:
             # Een tussenuur betekent niet naar huis: alleen het eerste en het
             # laatste uur veranderen wanneer hij komt of gaat.
@@ -127,29 +140,31 @@ def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             klok = (f'<span class="klok">{html.escape(v["klok"])}</span>'
                     if v.get("klok") else "")
             d.append(_rij(v["vak"], f'{v["dag"]} · {v["tijd"]}',
-                          f'<span class="groot {kl}">{html.escape(v["gevolg"])}</span>{klok}',
+                          f'<span class="groot {kl}">{html.escape(klein(v["gevolg"]))}</span>{klok}',
                           "uitval"))
 
     if gewijzigd:
-        d.append("<h2>GEWIJZIGD</h2>")
+        d.append("<h2>gewijzigd</h2>")
         for v in gewijzigd:
             was = f'<span class="was">{html.escape(v["was"])}</span>' if v.get("was") else ""
             d.append(_rij(v["vak"], f'{v["label"]} · {v["dag"]}',
-                          f'<span class="groot">{html.escape(v["nu"])}</span>{was}'))
+                          f'<span class="groot">{html.escape(klein(v["nu"]))}</span>{was}'))
 
     if toetsen:
-        d.append("<h2>TOETSEN</h2>")
+        d.append("<h2>toetsen</h2>")
         for t in toetsen:
             k = "d0" if t["dagen"] == 0 else ("d1" if t["dagen"] == 1 else "dv")
+            voor = (f'<span class="voor">{html.escape(klein(t["voor"]))}</span>'
+                    if t.get("voor") else "")
+            # De dagnaam zegt wanneer, de aftelling hoe dichtbij. Bij vandaag en
+            # morgen is aftellen overbodig.
+            tel = (f'<span class="tel">nog {t["dagen"]} dagen</span>'
+                   if t["dagen"] >= 2 else "")
             d.append(_rij(t["vak"], t["wat"],
-                          f'<span class="groot {k}">{aftel(t["dagen"])}</span>'))
+                          f'{voor}<span class="groot {k}">{html.escape(klein(t["dag"]))}</span>{tel}'))
 
     return (f"<!doctype html><meta charset='utf-8'><style>{CSS}</style>"
             f"<body>{''.join(d)}</body>")
-
-
-def aftel(dagen: int) -> str:
-    return {0: "VANDAAG", 1: "MORGEN"}.get(dagen, f"{dagen} DAGEN")
 
 
 def teken_kaart(start, uitval, gewijzigd, toetsen, vandaag, uitvoer) -> str:
@@ -179,23 +194,27 @@ def teken_kaart(start, uitval, gewijzigd, toetsen, vandaag, uitvoer) -> str:
     return uitvoer
 
 
-# Demo-data, zodat de opmaak los van de API te renderen is (zie kaart-test.yml).
+# Demo-data om de opmaak los van de API te renderen (zie kaart-test.yml).
+# Let op: alles hoort bij een dag, want dat is wat de kaart toont.
 DEMO = dict(
-    start={"dag": "morgen", "soort": "later", "reden": "1e uur vervalt",
+    start={"dag": "morgen", "reden": "1e uur vervalt",
            "tijd": "10:10", "uur": 2, "vak": "wiskunde", "lokaal": "zf101"},
-    uitval=[{"vak": "handvaardigheid", "dag": "do", "uur": 1, "tijd": "09:00",
+    uitval=[{"vak": "handvaardigheid", "dag": "1e uur", "tijd": "09:00",
              "gevolg": "later beginnen", "klok": "10:10", "positie": "rand"},
-            {"vak": "muziek", "dag": "wo", "uur": 5, "tijd": "13:55",
+            {"vak": "muziek", "dag": "4e uur", "tijd": "12:45",
              "gevolg": "tussenuur", "klok": "", "positie": "midden"},
-            {"vak": "lichamelijke opvoeding", "dag": "vr", "uur": 6, "tijd": "15:00",
+            {"vak": "lichamelijke opvoeding", "dag": "6e uur", "tijd": "15:00",
              "gevolg": "eerder uit", "klok": "14:55", "positie": "rand"}],
-    gewijzigd=[{"vak": "aardrijkskunde", "dag": "di", "uur": 3, "tijd": "11:30",
-                "label": "ander lokaal", "nu": "zh005", "was": "zh104"},
-               {"vak": "godsdienst", "dag": "ma", "uur": 5, "tijd": "13:15",
-                "label": "verplaatst", "nu": "13:15", "was": "13:55"}],
-    toetsen=[{"vak": "handvaardigheid", "wat": "Toets theorie: Vorm", "dagen": 0},
-             {"vak": "Duitse taal", "wat": "Mini SO", "dagen": 1},
-             {"vak": "wiskunde", "wat": "Toets hoofdstuk 1", "dagen": 8}],
+    gewijzigd=[{"vak": "aardrijkskunde", "dag": "3e uur", "tijd": "11:30",
+                "label": "ander lokaal", "nu": "zh005", "was": "zh104"}],
+    toetsen=[{"vak": "handvaardigheid", "wat": "Toets theorie: Vorm", "dagen": 0,
+              "voor": None, "dag": "vandaag"},
+             {"vak": "Duitse taal", "wat": "Mini SO", "dagen": 1,
+              "voor": None, "dag": "morgen"},
+             {"vak": "geschiedenis", "wat": "SO hoofdstuk 2", "dagen": 3,
+              "voor": None, "dag": "vrijdag"},
+             {"vak": "wiskunde", "wat": "Toets hoofdstuk 1", "dagen": 8,
+              "voor": "volgende week", "dag": "woensdag"}],
     vandaag="di 15 sep")
 
 if __name__ == "__main__":

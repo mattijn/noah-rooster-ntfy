@@ -665,11 +665,44 @@ def vul_vaknamen(snapshots: dict) -> None:
 
 
 DAGNAMEN = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+VOLLE_DAGNAMEN = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag",
+                  "zaterdag", "zondag"]
 MAANDEN = ["jan", "feb", "mrt", "apr", "mei", "jun",
            "jul", "aug", "sep", "okt", "nov", "dec"]
 
 _WAS_LOKAAL = re.compile(r"lokaal.*?\(was\s+([^)]+)\)", re.I)
 _WAS_TIJD = re.compile(r"verplaatst.*?van\s+\w*\s*(\d{1,2}[:.]\d{2})", re.I)
+
+
+def dagaanduiding(doel: dt.date, vandaag: dt.date) -> tuple[str | None, str]:
+    """Noem een dag zoals een mens dat doet.
+
+    Geeft (voorvoegsel, dag) terug: vandaag, morgen, anders de dagnaam binnen
+    deze week, en daarna "volgende week" ervoor. Een aftelling in dagen laat je
+    zelf rekenen; op vrijdag is "8 dagen" niet te plaatsen en "volgende week
+    zaterdag" wel.
+    """
+    verschil = (doel - vandaag).days
+    if verschil == 0:
+        return None, "vandaag"
+    if verschil == 1:
+        return None, "morgen"
+    naam = VOLLE_DAGNAMEN[doel.weekday()]
+    # Verschil in kalenderweken, via de maandag van elke week; dat werkt ook
+    # over een jaargrens heen.
+    weken = ((doel - dt.timedelta(days=doel.weekday()))
+             - (vandaag - dt.timedelta(days=vandaag.weekday()))).days // 7
+    if vandaag.weekday() >= 5:
+        # In het weekend hoort de eerstvolgende schoolweek al bij "deze week";
+        # op zondag zeg je "dinsdag", niet "volgende week dinsdag".
+        weken -= 1
+    if weken <= 0:
+        # Zelfde dagnaam maar een week verder mag niet kaal: "zondag" zou dan
+        # twee verschillende dagen kunnen betekenen.
+        return ("volgende week", naam) if verschil >= 7 else (None, naam)
+    if weken == 1:
+        return "volgende week", naam
+    return f"over {weken} weken", naam
 
 
 def _tijdstip(waarde: str | None) -> dt.datetime | None:
@@ -706,12 +739,15 @@ def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
     kandidaten = sorted(d for d in per_dag if d >= nu.date())
     for datum in kandidaten:
         lessen = per_dag[datum]
-        doorgaand = [l for l in lessen if not _vervalt(l) and l["_begin"] > nu]
+        doorgaand = [l for l in lessen if not _vervalt(l)]
+        if doorgaand and doorgaand[0]["_begin"] <= nu:
+            # Deze schooldag loopt al of is voorbij; "begin je om" slaat dan
+            # nergens op. Door naar de eerstvolgende dag die nog moet beginnen.
+            continue
         if not doorgaand and not any(l["_begin"] > nu for l in lessen):
-            continue  # deze dag is voorbij
-        dagnaam = ("vandaag" if datum == nu.date()
-                   else "morgen" if datum == nu.date() + dt.timedelta(days=1)
-                   else f"{DAGNAMEN[datum.weekday()]} {datum.day} {MAANDEN[datum.month - 1]}")
+            continue
+        voor, dag = dagaanduiding(datum, nu.date())
+        dagnaam = f"{voor} {dag}" if voor else dag
         if not doorgaand:
             return {"dag": dagnaam, "geen_les": True, "datum": datum}
 
@@ -736,7 +772,7 @@ def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
     return None
 
 
-def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) -> tuple:
+def kaartgegevens(snapshots: dict, nu: dt.datetime, vooruit: int) -> tuple:
     """Zet de komende dagen om in de secties van de kaart."""
     per_dag = _lessen_per_dag(snapshots)
     blok = startblok(per_dag, nu)
@@ -781,6 +817,11 @@ def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) ->
             else:
                 gewijzigd.append({**basis, "label": wijziging.rstrip("."), "nu": "", "was": ""})
 
+    # Volgorde van uitval: eerst wat de dag later laat beginnen, dan de
+    # tussenuren, en als laatste wat je eerder naar huis stuurt.
+    rang = {"later beginnen": 0, "geen les": 0, "tussenuur": 1, "eerder uit": 2}
+    uitval.sort(key=lambda u: (rang.get(u["gevolg"], 1), u["tijd"]))
+
     toetsen = []
     for snap in snapshots.values():
         for rec in snap.get("huiswerk", {}).values():
@@ -791,8 +832,9 @@ def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) ->
             # Een toets die al geweest is heeft geen aftelling meer nodig; om
             # 20:00 nog "VANDAAG" tonen voor iets van vanochtend is onzin.
             if wanneer > nu and 0 <= resterend <= vooruit:
+                voor, dag = dagaanduiding(wanneer.date(), nu.date())
                 toetsen.append({"vak": rec.get("vak") or "?", "wat": rec.get("onderwerp") or "?",
-                                "dagen": resterend, "_s": wanneer})
+                                "dagen": resterend, "voor": voor, "dag": dag, "_s": wanneer})
     toetsen.sort(key=lambda t: t["_s"])
     for t in toetsen:
         t.pop("_s")
@@ -896,7 +938,7 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
 
     bijlage = None
     if kaart:
-        blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, dagen, vooruit)
+        blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, vooruit)
         if blok or uitval or gewijzigd_l or toetsen:
             try:
                 from rooster_kaart import teken_kaart
