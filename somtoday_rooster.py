@@ -560,7 +560,6 @@ def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> Non
         "User-Agent": USER_AGENT,
         # ntfy-headers zijn latin-1; accenten gaan er anders uit met een fout.
         "Title": _headerwaarde(titel),
-        "Tags": "calendar",
     }
     if bijlage and os.path.exists(bijlage):
         # Met een bestand als body moet de tekst in een header; ntfy host het
@@ -875,9 +874,9 @@ def toetssoort(onderwerp: str, api_type: str | None) -> tuple[bool, str | None]:
 
 
 def gesproken_tijd(tijd: str) -> str:
-    """09:00 wordt "9 uur"; een tijd met minuten laten we staan."""
+    """09:00 wordt 9.00, 10:10 wordt 10.10."""
     uur, _, minuut = tijd.partition(":")
-    return f"{int(uur)} uur" if minuut == "00" else tijd
+    return f"{int(uur)}.{minuut}"
 
 
 def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
@@ -887,18 +886,20 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
     Kort houden: de kaart eronder heeft de details al. De titel zegt wanneer
     school begint, de body groepeert wat eraan komt per dag.
     """
+    dag_in_titel = None
     if not blok:
         titel = "Rooster bijgewerkt"
     elif blok.get("geen_les"):
-        titel = f"Geen les {blok['dag']}"
+        titel = f"{blok['dag'].capitalize()} geen school"
+        dag_in_titel = blok["dag"]
     else:
-        wanneer = "straks" if blok["dag"] == "vandaag" else blok["dag"]
-        titel = f"School begint {wanneer} om {gesproken_tijd(blok['tijd'])}"
+        titel = f"{blok['dag'].capitalize()} school {gesproken_tijd(blok['tijd'])}"
+        dag_in_titel = blok["dag"]
 
     regels: list[str] = []
     if wijzigingen:
         regels.append("gewijzigd")
-        regels += [f"* {w}" for w in wijzigingen]
+        regels += [f"- {w}" for w in wijzigingen]
 
     per_dag: dict[str, list[str]] = {}
     for t in toetsen:
@@ -907,12 +908,16 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
         soort = "toets" if t["toets"] else "huiswerk"
         tussen = [x for x in (t.get("merk"), f"{t['uur']}e uur" if t.get("uur") else None) if x]
         haakjes = f" ({', '.join(tussen)})" if tussen else ""
-        per_dag.setdefault(kop, []).append(f"* {roepnaam(t['vak'])} {soort}{haakjes}")
+        per_dag.setdefault(kop, []).append(f"- {roepnaam(t['vak'])} {soort}{haakjes}")
 
     for kop, items in per_dag.items():
         if regels and regels[-1] != "":
             regels.append("")
-        regels.append(kop)
+        # Staat de dag al in de titel, dan hoeft hij er niet nog eens boven -
+        # maar alleen als dit blok bovenaan staat, anders lijkt het bij het
+        # blok erboven te horen.
+        if kop != dag_in_titel or regels:
+            regels.append(kop)
         regels += items
     return titel, "\n".join(regels).strip()
 
