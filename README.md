@@ -4,7 +4,7 @@ Leest Noahs weekrooster uit Somtoday en pusht wijzigingen naar ntfy.
 
 Meldt uitval, verplaatsingen, lokaalwijzigingen en nieuwe toetsen/huiswerk.
 Draait als GitHub Action: doordeweeks elk uur tijdens schooltijd, plus een
-vast bericht om 06:30 en om 20:00.
+vast bericht om 06:30 en om 17:30.
 
 ## De melding
 
