@@ -132,7 +132,11 @@ def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             kl = "gat" if v["positie"] == "midden" else "tijdwinst"
             klok = (f'<span class="klok">{html.escape(v["klok"])}</span>'
                     if v.get("klok") else "")
-            d.append(_rij(v["vak"], f'{v["dag"]} · {v["tijd"]}',
+            # Staat er rechts een tijd, dan is dat wanneer hij komt of gaat.
+            # De begintijd van de vervallen les erbij zetten leest als een les
+            # van tien minuten; het lesuur alleen is genoeg.
+            sub = v["dag"] if v.get("klok") else f'{v["dag"]} · {v["tijd"]}'
+            d.append(_rij(v["vak"], sub,
                           f'<span class="groot {kl}">{html.escape(klein(v["gevolg"]))}</span>{klok}',
                           "uitval"))
 
