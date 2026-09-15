@@ -43,7 +43,10 @@ De kaart wordt opgebouwd als HTML en met headless Chrome naar PNG geschreven
 (`rooster_kaart.py`). Chrome staat op een GitHub-runner al klaar, dus Playwright
 gebruikt die via `channel="chrome"` en hoeft er geen te downloaden. Kleuren-emoji
 waren er niet nodig: de vakiconen zijn Lucide-SVG's die in `vakiconen.py` staan
-ingebakken.
+ingebakken. Talen krijgen geen icoon maar een vlag als achtergrond - Lucide
+heeft niets dat duits van frans onderscheidt. De vlaggen zijn CSS-gradients;
+de Union Jack is vereenvoudigd (geen diagonalen), want die zijn zo niet netjes
+te maken en op 36 pixels zie je het verschil niet.
 
 Twee dingen waar de data tegenwerkt. Uitgevallen lessen komen met een afkorting
 als vaknaam ("mu" in plaats van "muziek"); die zoeken we op via docent+lokaal en

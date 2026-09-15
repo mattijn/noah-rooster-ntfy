@@ -69,6 +69,7 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 .chip{width:36px;height:36px;border-radius:11px;flex:none;display:flex;
  align-items:center;justify-content:center}
 .chip svg{width:19px;height:19px}
+.chip.vlag{box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
 .mid{flex:1;min-width:0}
 .vak{font-size:16.5px;font-weight:650;line-height:1.2;white-space:nowrap;
  overflow:hidden;text-overflow:ellipsis}
@@ -89,7 +90,25 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 """ % BREEDTE
 
 
+# Talen krijgen geen icoon maar een vlag: bij Lucide is er niets dat duits van
+# frans onderscheidt, en een vlag herken je zonder nadenken. Opgebouwd uit
+# gradients, dus geen plaatjes van buiten.
+VLAGGEN = {
+    "nederlands": "linear-gradient(#ae1c28 33.3%,#fff 33.3%,#fff 66.6%,#21468b 66.6%)",
+    "duits": "linear-gradient(#000 33.3%,#dd0000 33.3%,#dd0000 66.6%,#ffce00 66.6%)",
+    "frans": "linear-gradient(to right,#002395 33.3%,#fff 33.3%,#fff 66.6%,#ed2939 66.6%)",
+    "engels": ("linear-gradient(transparent 40%,#c8102e 40%,#c8102e 60%,transparent 60%),"
+               "linear-gradient(to right,transparent 40%,#c8102e 40%,#c8102e 60%,transparent 60%),"
+               "linear-gradient(transparent 28%,#fff 28%,#fff 72%,transparent 72%),"
+               "linear-gradient(to right,transparent 28%,#fff 28%,#fff 72%,transparent 72%),"
+               "#012169"),
+    "spaans": "linear-gradient(#aa151b 25%,#f1bf00 25%,#f1bf00 75%,#aa151b 75%)",
+}
+
+
 def _chip(vak: str) -> str:
+    if vlag := VLAGGEN.get(roepnaam(vak)):
+        return f'<div class="chip vlag" style="background:{vlag}"></div>'
     bg, fg = kleur(vak)
     svg = (f'<svg viewBox="0 0 24 24" fill="none" stroke="{fg}" stroke-width="2" '
            f'stroke-linecap="round" stroke-linejoin="round">{icoon_voor(vak)}</svg>')
@@ -209,8 +228,12 @@ DEMO = dict(
               "voor": None, "dag": "vandaag"},
              {"vak": "Duitse taal", "wat": "Mini SO", "dagen": 1,
               "voor": None, "dag": "morgen"},
-             {"vak": "geschiedenis", "wat": "SO hoofdstuk 2", "dagen": 3,
+             {"vak": "Nederlandse taal", "wat": "boekverslag", "dagen": 2,
+              "voor": None, "dag": "donderdag"},
+             {"vak": "Franse taal", "wat": "SO woorden", "dagen": 3,
               "voor": None, "dag": "vrijdag"},
+             {"vak": "Engelse taal", "wat": "toets unit 1", "dagen": 4,
+              "voor": None, "dag": "zaterdag"},
              {"vak": "wiskunde", "wat": "Toets hoofdstuk 1", "dagen": 8,
               "voor": "volgende week", "dag": "woensdag"}],
     vandaag="di 15 sep")
