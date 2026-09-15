@@ -482,7 +482,9 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
 
     def binnen(begin: str | None) -> bool:
         wanneer = _tijdstip(begin)
-        return bool(wanneer) and wanneer <= tot
+        if not wanneer or wanneer > tot:
+            return False
+        return hoofddag is None or wanneer.date() == hoofddag
 
     def plek(rec: dict) -> str:
         wanneer = _tijdstip(rec.get("begin") or rec.get("datumTijd"))
@@ -898,15 +900,15 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
         titel = f"{blok['dag'].capitalize()} school {gesproken_tijd(blok['tijd'])}"
         hoofddag = blok.get("datum")
 
+    # Alleen de dag uit de titel. Wat verder weg ligt staat op de kaart, en
+    # die zie je zodra je de melding opent.
     regels: list[str] = []
     for t in toetsen:
-        soort = "toets" if t["toets"] else "huiswerk"
-        tussen = [t.get("merk")]
         if t["_datum"] != hoofddag:
-            tussen.append(f"{t['voor']} {t['dag']}" if t.get("voor") else t["dag"])
-        if t.get("uur"):
-            tussen.append(f"{t['uur']}e uur")
-        tussen = [x for x in tussen if x]
+            continue
+        soort = "toets" if t["toets"] else "huiswerk"
+        tussen = [x for x in (t.get("merk"),
+                              f"{t['uur']}e uur" if t.get("uur") else None) if x]
         haakjes = f" ({', '.join(tussen)})" if tussen else ""
         regels.append(f"- {roepnaam(t['vak'])} {soort}{haakjes}")
 
