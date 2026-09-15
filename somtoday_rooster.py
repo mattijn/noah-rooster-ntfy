@@ -471,7 +471,8 @@ GEVOLGD = {
 }
 
 
-def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime) -> list[str]:
+def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
+               hoofddag: dt.date | None = None) -> list[str]:
     """Beschrijf wat er veranderd is, in de taal van de melding zelf.
 
     Regels zien eruit als "wiskunde vervalt (donderdag, 2e uur)": eerst het
@@ -487,10 +488,12 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime) -> list[str]:
         wanneer = _tijdstip(rec.get("begin") or rec.get("datumTijd"))
         if not wanneer:
             return ""
-        delen = [VOLLE_DAGNAMEN[wanneer.weekday()]]
+        delen = []
+        if wanneer.date() != hoofddag:
+            delen.append(VOLLE_DAGNAMEN[wanneer.weekday()])
         if rec.get("lesuur"):
             delen.append(f"{rec['lesuur']}e uur")
-        return f" ({', '.join(delen)})"
+        return f" ({', '.join(delen)})" if delen else ""
 
     oude_lessen, nieuwe_lessen = oud.get("lessen", {}), nieuw.get("lessen", {})
     for sleutel, na in nieuwe_lessen.items():
@@ -883,43 +886,32 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
               nu: dt.datetime) -> tuple[str, str]:
     """Bouw titel en body van de melding.
 
-    Kort houden: de kaart eronder heeft de details al. De titel zegt wanneer
-    school begint, de body groepeert wat eraan komt per dag.
+    Kort houden: de kaart eronder heeft de indeling al. De titel zegt wanneer
+    school begint, de body is een platte lijst. Wat op die dag valt noemt geen
+    dag; wat verder weg ligt wel.
     """
-    dag_in_titel = None
     if not blok:
-        titel = "Rooster bijgewerkt"
+        titel, hoofddag = "Rooster bijgewerkt", None
     elif blok.get("geen_les"):
-        titel = f"{blok['dag'].capitalize()} geen school"
-        dag_in_titel = blok["dag"]
+        titel, hoofddag = f"{blok['dag'].capitalize()} geen school", blok.get("datum")
     else:
         titel = f"{blok['dag'].capitalize()} school {gesproken_tijd(blok['tijd'])}"
-        dag_in_titel = blok["dag"]
+        hoofddag = blok.get("datum")
 
     regels: list[str] = []
-    if wijzigingen:
-        regels.append("gewijzigd")
-        regels += [f"- {w}" for w in wijzigingen]
-
-    per_dag: dict[str, list[str]] = {}
     for t in toetsen:
-        voor, dag = dagaanduiding(t["_datum"], nu.date(), overmorgen=True)
-        kop = f"{voor} {dag}" if voor else dag
         soort = "toets" if t["toets"] else "huiswerk"
-        tussen = [x for x in (t.get("merk"), f"{t['uur']}e uur" if t.get("uur") else None) if x]
+        tussen = [t.get("merk")]
+        if t["_datum"] != hoofddag:
+            tussen.append(f"{t['voor']} {t['dag']}" if t.get("voor") else t["dag"])
+        if t.get("uur"):
+            tussen.append(f"{t['uur']}e uur")
+        tussen = [x for x in tussen if x]
         haakjes = f" ({', '.join(tussen)})" if tussen else ""
-        per_dag.setdefault(kop, []).append(f"- {roepnaam(t['vak'])} {soort}{haakjes}")
+        regels.append(f"- {roepnaam(t['vak'])} {soort}{haakjes}")
 
-    for kop, items in per_dag.items():
-        if regels and regels[-1] != "":
-            regels.append("")
-        # Staat de dag al in de titel, dan hoeft hij er niet nog eens boven -
-        # maar alleen als dit blok bovenaan staat, anders lijkt het bij het
-        # blok erboven te horen.
-        if kop != dag_in_titel or regels:
-            regels.append(kop)
-        regels += items
-    return titel, "\n".join(regels).strip()
+    regels += [f"- {w}" for w in wijzigingen]
+    return titel, "\n".join(regels)
 
 
 def kaartkop(start: dict | None) -> str:
@@ -969,10 +961,15 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
             oude = json.load(fh).get("weken", {})
 
     eerste_keer = not oude
+    # De kaartgegevens eerst: daar komt de dag uit waar deze melding over gaat,
+    # en die bepaalt of een wijzigingsregel zijn dagnaam nodig heeft.
+    blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, vooruit)
+    hoofddag = blok.get("datum") if blok else None
+
     regels: list[str] = []
     for label, snap in verse.items():
         if label in oude:  # alleen weken die we eerder al zagen
-            regels += _vergelijk(oude[label], snap, tot)
+            regels += _vergelijk(oude[label], snap, tot, hoofddag)
 
     bewaard = {**oude, **verse}
     with open(STATE_FILE, "w") as fh:
@@ -1008,7 +1005,6 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
     if not notify or not (regels or altijd):
         return
 
-    blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, vooruit)
     kop, tekst = meldtekst(blok, toetsen, regels, nu)
 
     bijlage = None
