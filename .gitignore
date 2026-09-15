@@ -1,11 +1,13 @@
 # Nooit in git: dit is leestoegang tot het Somtoday-account.
 tokens.json
+state.json
 # Het ntfy-topic is het enige wat de meldingen afschermt.
 config.json
 .callback_url
 __pycache__/
 
-# state.json en tokens.enc horen er juist wel in: de Action heeft ze nodig
-# om tussen runs te onthouden wat de vorige stand was.
+# tokens.enc en state.enc horen er juist wel in: de Action heeft ze nodig om
+# tussen runs te onthouden wat de vorige stand was. De onversleutelde versies
+# blijven erbuiten - in state.json staat het rooster van een kind.
 
 kaart.png

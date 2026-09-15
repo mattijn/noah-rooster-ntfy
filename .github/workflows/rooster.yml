@@ -44,13 +44,21 @@ jobs:
       - name: Playwright
         run: pip install --quiet playwright
 
-      - name: Tokens ontsleutelen
+      # Zowel het token als de opgeslagen stand: in state.json staat het rooster
+      # met vakken, lokalen, docenten en toetsonderwerpen, en dat hoort niet
+      # leesbaar in een repo.
+      - name: Ontsleutelen
         env:
           TOKEN_PASS: ${{ secrets.TOKEN_PASS }}
         run: |
           openssl enc -d -aes-256-cbc -pbkdf2 -in tokens.enc -out tokens.json \
             -pass env:TOKEN_PASS
           chmod 600 tokens.json
+          if [ -s state.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -in state.enc -out state.json \
+              -pass env:TOKEN_PASS
+            chmod 600 state.json
+          fi
 
       - name: Rooster controleren
         env:
@@ -62,7 +70,7 @@ jobs:
 
       # Moet ook draaien als de stap hierboven faalt: het token kan dan al
       # geroteerd zijn, en het oude is vanaf dat moment waardeloos.
-      - name: Geroteerd token terugschrijven
+      - name: Geroteerde stand terugschrijven
         if: always()
         env:
           TOKEN_PASS: ${{ secrets.TOKEN_PASS }}
@@ -73,8 +81,13 @@ jobs:
           openssl enc -aes-256-cbc -pbkdf2 -salt -in tokens.json -out tokens.enc \
             -pass env:TOKEN_PASS
           rm -f tokens.json
+          if [ -s state.json ]; then
+            openssl enc -aes-256-cbc -pbkdf2 -salt -in state.json -out state.enc \
+              -pass env:TOKEN_PASS
+            rm -f state.json
+          fi
           git config user.name  "rooster-bot"
           git config user.email "rooster-bot@users.noreply.github.com"
-          git add tokens.enc state.json
+          git add tokens.enc state.enc
           git diff --cached --quiet || git commit -m "rooster: stand bijgewerkt [skip ci]"
           git push

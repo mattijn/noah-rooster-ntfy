@@ -44,7 +44,10 @@ Toetsen en huiswerk komen uit `/rest/v1/studiewijzeritemafspraaktoekenningen`
 en worden op begintijd aan een les gekoppeld. Docenten voeren een SO regelmatig
 in als `HUISWERK` in plaats van `TOETS`, dus filter niet op type.
 
-`state.json` bewaart de vorige stand; `check` meldt alleen het verschil.
+`state.json` bewaart de vorige stand; `check` meldt alleen het verschil. In de
+repo staat hij versleuteld als `state.enc`, met hetzelfde wachtwoord als het
+token - er staan vakken, lokalen, docenten en toetsonderwerpen van een kind in,
+en dat hoort niet leesbaar in een repo.
 
 De kaart wordt opgebouwd als HTML en met headless Chrome naar PNG geschreven
 (`rooster_kaart.py`). Chrome staat op een GitHub-runner al klaar, dus Playwright
@@ -96,5 +99,5 @@ Op de Mac, met SomtodayCallback.app in ~/Applications:
 
 ## Secrets
 
-- `TOKEN_PASS` - wachtwoord waarmee `tokens.enc` versleuteld is
+- `TOKEN_PASS` - wachtwoord waarmee `tokens.enc` en `state.enc` versleuteld zijn
 - `NTFY_TOPIC` - ntfy-topic waar de meldingen heen gaan
