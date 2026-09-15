@@ -1,0 +1,58 @@
+name: Rooster
+
+on:
+  schedule:
+    # Tijden in UTC. Nederland is 's zomers UTC+2, 's winters UTC+1.
+    - cron: "30 4 * * 1-5"     # 06:30 NL (zomer): ochtendbericht
+    - cron: "0 5-15 * * 1-5"   # elk uur tijdens schooltijd
+  workflow_dispatch:
+
+# Twee gelijktijdige runs betekent gegarandeerd een ingetrokken refresh token.
+# Nooit cancelen: een run die halverwege stopt laat ons buitengesloten achter.
+concurrency:
+  group: rooster
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tokens ontsleutelen
+        env:
+          TOKEN_PASS: ${{ secrets.TOKEN_PASS }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -in tokens.enc -out tokens.json \
+            -pass env:TOKEN_PASS
+          chmod 600 tokens.json
+
+      - name: Rooster controleren
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 somtoday_rooster.py check --notify --dagen 3
+
+      # Moet ook draaien als de stap hierboven faalt: het token kan dan al
+      # geroteerd zijn, en het oude is vanaf dat moment waardeloos.
+      - name: Geroteerd token terugschrijven
+        if: always()
+        env:
+          TOKEN_PASS: ${{ secrets.TOKEN_PASS }}
+        run: |
+          if [ ! -s tokens.json ]; then
+            echo "Geen tokens.json; niets terug te schrijven." && exit 0
+          fi
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in tokens.json -out tokens.enc \
+            -pass env:TOKEN_PASS
+          rm -f tokens.json
+          git config user.name  "rooster-bot"
+          git config user.email "rooster-bot@users.noreply.github.com"
+          git add tokens.enc state.json
+          git diff --cached --quiet || git commit -m "rooster: stand bijgewerkt [skip ci]"
+          git push
