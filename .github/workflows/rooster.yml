@@ -6,6 +6,11 @@ on:
     - cron: "30 4 * * 1-5"     # 06:30 NL (zomer): ochtendbericht
     - cron: "0 5-15 * * 1-5"   # elk uur tijdens schooltijd
   workflow_dispatch:
+    inputs:
+      altijd:
+        description: "Ook pushen als er niets gewijzigd is"
+        type: boolean
+        default: false
 
 # Twee gelijktijdige runs betekent gegarandeerd een ingetrokken refresh token.
 # Nooit cancelen: een run die halverwege stopt laat ons buitengesloten achter.
@@ -36,7 +41,10 @@ jobs:
       - name: Rooster controleren
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python3 somtoday_rooster.py check --notify --dagen 3
+          # De ochtendrun stuurt altijd een bericht met de agenda; de uurruns
+          # alleen als er echt iets gewijzigd is.
+          ALTIJD: ${{ (github.event.schedule == '30 4 * * 1-5' || inputs.altijd) && '--altijd' || '' }}
+        run: python3 somtoday_rooster.py check --notify --dagen 3 --vooruit 14 $ALTIJD
 
       # Moet ook draaien als de stap hierboven faalt: het token kan dan al
       # geroteerd zijn, en het oude is vanaf dat moment waardeloos.

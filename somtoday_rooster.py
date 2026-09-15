@@ -426,14 +426,20 @@ def _snapshot(items: list[dict], huiswerk: list[dict]) -> dict:
             "docent": ", ".join(sorted(n.upper() for n in (a.get("docentNamen") or []))),
             "wijziging": (a.get("wijzigingOmschrijving") or "").strip(),
         }
+    # Een huiswerkitem noemt alleen de lesgroepcode (ZTH1CHA), niet het vak.
+    # Via de begintijd vinden we de bijbehorende les en daarmee de vaknaam.
+    vak_op_tijd = {(l["begin"] or "")[:16]: l["vak"] for l in lessen.values()}
+
     werk = {}
     for h in huiswerk:
         swi = h.get("studiewijzerItem") or {}
         onderwerp = (swi.get("onderwerp") or "").strip()
-        werk[f"{h.get('datumTijd')}|{onderwerp}"] = {
-            "datumTijd": h.get("datumTijd"),
+        tijd = h.get("datumTijd")
+        werk[f"{tijd}|{onderwerp}"] = {
+            "datumTijd": tijd,
             "type": swi.get("huiswerkType"),
             "onderwerp": onderwerp,
+            "vak": vak_op_tijd.get((tijd or "")[:16]) or (h.get("lesgroep") or {}).get("naam"),
         }
     return {"lessen": lessen, "huiswerk": werk}
 
@@ -536,7 +542,49 @@ def stuur_notificatie(titel: str, tekst: str) -> None:
             raise SystemExit(f"ntfy antwoordde met HTTP {resp.status}")
 
 
-def do_check(dagen: int, notify: bool, reset: bool) -> None:
+def _dagen_tekst(dagen: int) -> str:
+    """'vandaag' / 'morgen' / 'nog 3 dagen'."""
+    if dagen <= 0:
+        return "vandaag"
+    if dagen == 1:
+        return "morgen"
+    return f"nog {dagen} dagen"
+
+
+def komende_toetsen(snapshots: dict, nu: dt.datetime, vooruit: int) -> list[str]:
+    """Aftelling naar toetsen en huiswerk in de komende 'vooruit' dagen.
+
+    Toetsen staan voorop: een SO die als HUISWERK is ingevoerd telt evengoed,
+    dus we tonen alles en markeren alleen wat de school echt toets noemt.
+    """
+    vandaag = nu.date()
+    gevonden: dict[str, tuple] = {}
+    for snap in snapshots.values():
+        for sleutel, rec in snap.get("huiswerk", {}).items():
+            begin = rec.get("datumTijd") or ""
+            try:
+                wanneer = dt.datetime.fromisoformat(begin[:19]).date()
+            except ValueError:
+                continue
+            resterend = (wanneer - vandaag).days
+            if not 0 <= resterend <= vooruit:
+                continue
+            is_toets = rec.get("type") in ("TOETS", "GROTE_TOETS")
+            gevonden[sleutel] = (wanneer, resterend, is_toets, rec)
+
+    regels = []
+    for wanneer, resterend, is_toets, rec in sorted(gevonden.values(), key=lambda x: x[0]):
+        dagnamen = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+        merk = "TOETS   " if is_toets else "huiswerk"
+        vak = rec.get("vak") or "?"
+        regels.append(
+            f"{_dagen_tekst(resterend):<12} {dagnamen[wanneer.weekday()]} {wanneer:%d-%m}  "
+            f"{merk}  {vak} - {rec['onderwerp']}"
+        )
+    return regels
+
+
+def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool) -> None:
     tokens = load_tokens()
     token, api_url = refresh_access_token(tokens)
     students = api_get(api_url, token, "/rest/v1/leerlingen")
@@ -550,10 +598,12 @@ def do_check(dagen: int, notify: bool, reset: bool) -> None:
     nu = dt.datetime.now()
     tot = nu + dt.timedelta(days=dagen)
 
-    # Haal elke ISO-week op die binnen het venster valt.
+    # Wijzigingen melden we alleen vlak vooruit, maar voor de aftelling naar
+    # toetsen kijken we verder; daarom halen we het ruimste venster op.
     weken = {}
     dag = nu.date()
-    while dag <= tot.date():
+    laatste = nu.date() + dt.timedelta(days=max(dagen, vooruit))
+    while dag <= laatste:
         jaar, week, _ = dag.isocalendar()
         weken[f"{jaar}-{week:02d}"] = (jaar, week)
         dag += dt.timedelta(days=1)
@@ -580,22 +630,42 @@ def do_check(dagen: int, notify: bool, reset: bool) -> None:
         json.dump({"bijgewerkt": nu.isoformat(timespec="seconds"), "weken": bewaard}, fh, indent=2, ensure_ascii=False)
     os.chmod(STATE_FILE, stat.S_IRUSR | stat.S_IWUSR)
 
+    agenda = komende_toetsen(verse, nu, vooruit)
+
+    def toon_agenda() -> None:
+        if agenda:
+            print(f"\nOp de agenda (komende {vooruit} dagen):")
+            for a in agenda:
+                print(f"  {a}")
+        else:
+            print(f"\nGeen toetsen of huiswerk in de komende {vooruit} dagen.")
+
     if eerste_keer:
         print(f"Eerste run: beginstand opgeslagen ({sum(len(s['lessen']) for s in verse.values())} lessen). "
               "Vanaf nu worden wijzigingen gemeld.")
-        return
-    if not regels:
-        print(f"Geen wijzigingen in de komende {dagen} dagen.")
+        toon_agenda()
         return
 
-    kop = f"Rooster {naam}: {len(regels)} wijziging{'en' if len(regels) != 1 else ''}"
-    tekst = "\n".join(regels)
-    print(kop)
-    for r in regels:
-        print(f"  {r}")
-    if notify:
-        stuur_notificatie(kop, tekst)
-        print("\n-> notificatie verstuurd")
+    if regels:
+        kop = f"Rooster {naam}: {len(regels)} wijziging{'en' if len(regels) != 1 else ''}"
+        print(kop)
+        for r in regels:
+            print(f"  {r}")
+    else:
+        kop = f"Rooster {naam}"
+        print(f"Geen wijzigingen in de komende {dagen} dagen.")
+    toon_agenda()
+
+    if not notify or not (regels or altijd):
+        return
+    delen = list(regels)
+    if agenda:
+        if delen:
+            delen.append("")
+        delen.append("Op de agenda:")
+        delen += agenda
+    stuur_notificatie(kop, "\n".join(delen) or "Geen wijzigingen.")
+    print("\n-> notificatie verstuurd")
 
 
 def main() -> None:
@@ -611,12 +681,14 @@ def main() -> None:
     c.add_argument("--dagen", type=int, default=3, help="hoe ver vooruit kijken (standaard 3)")
     c.add_argument("--notify", action="store_true", help="push via ntfy (zie config.json)")
     c.add_argument("--reset", action="store_true", help="beginstand opnieuw vastleggen")
+    c.add_argument("--vooruit", type=int, default=14, help="aftelling naar toetsen, in dagen (standaard 14)")
+    c.add_argument("--altijd", action="store_true", help="ook pushen als er niets gewijzigd is")
 
     args = parser.parse_args()
     if args.cmd == "login":
         do_login()
     elif args.cmd == "check":
-        do_check(args.dagen, args.notify, args.reset)
+        do_check(args.dagen, args.notify, args.reset, args.vooruit, args.altijd)
     else:
         show_rooster(args.week, args.json, args.leerling)
 
