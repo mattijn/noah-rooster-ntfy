@@ -420,6 +420,9 @@ def _snapshot(items: list[dict], huiswerk: list[dict]) -> dict:
             "eind": a.get("eindDatumTijd"),
             "lesuur": a.get("beginLesuur"),
             "vak": (a.get("vak") or {}).get("naam") or a.get("titel"),
+            # Een uitgevallen les heeft geen vakobject; dan blijft alleen een
+            # korte code over ("mu"). vul_vaknamen() repareert dat achteraf.
+            "vak_bekend": bool((a.get("vak") or {}).get("naam")),
             "lokaal": a.get("locatie"),
             # De API levert docentNamen niet in een vaste volgorde; sorteren
             # voorkomt meldingen over een wijziging die er niet is.
@@ -599,6 +602,44 @@ def komende_toetsen(snapshots: dict, nu: dt.datetime, vooruit: int) -> list[str]
     return regels
 
 
+def vul_vaknamen(snapshots: dict) -> None:
+    """Vervang korte codes van uitgevallen lessen door de echte vaknaam.
+
+    Een uitgevallen les komt zonder vakobject binnen; er blijft een code over
+    ("mu"). Dezelfde les staat in een andere week wel compleet in de data, dus
+    we zoeken hem daar op via docent+lokaal, en anders via weekdag+lesuur.
+
+    Beide sleutels zijn soms dubbelzinnig: een docent geeft meerdere vakken, en
+    een lesuur wisselt per week. We vullen daarom alleen in als er precies een
+    kandidaat is. Een code laten staan is beter dan de verkeerde naam tonen.
+    """
+    def moment(les: dict):
+        try:
+            return dt.datetime.fromisoformat((les.get("begin") or "")[:19])
+        except ValueError:
+            return None
+
+    op_docent_lokaal: dict[tuple, set] = {}
+    op_dag_uur: dict[tuple, set] = {}
+    for snap in snapshots.values():
+        for les in snap.get("lessen", {}).values():
+            if not les.get("vak_bekend") or not (wanneer := moment(les)):
+                continue
+            op_docent_lokaal.setdefault((les.get("docent"), les.get("lokaal")), set()).add(les["vak"])
+            op_dag_uur.setdefault((wanneer.weekday(), les.get("lesuur")), set()).add(les["vak"])
+
+    for snap in snapshots.values():
+        for les in snap.get("lessen", {}).values():
+            if les.get("vak_bekend") or not (wanneer := moment(les)):
+                continue
+            for kaart, sleutel in ((op_docent_lokaal, (les.get("docent"), les.get("lokaal"))),
+                                   (op_dag_uur, (wanneer.weekday(), les.get("lesuur")))):
+                kandidaten = kaart.get(sleutel, set())
+                if len(kandidaten) == 1:
+                    les["vak"] = next(iter(kandidaten))
+                    break
+
+
 def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) -> tuple:
     """Zet de komende dagen om in de drie secties van de patch notes-kaart.
 
@@ -695,6 +736,7 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
         items = api_get(api_url, token, f"/rest/v1/afspraakitems/{leerling_id}/jaar/{jaar}/week/{week}")
         items = items.get("items", items) if isinstance(items, dict) else items
         verse[label] = _snapshot(items, haal_huiswerk(api_url, token, leerling_id, jaar, week))
+    vul_vaknamen(verse)
 
     oude = {}
     if os.path.exists(STATE_FILE) and not reset:
