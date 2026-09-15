@@ -43,27 +43,29 @@ def kleur(vak: str) -> tuple[str, str]:
 
 CSS = """
 *{margin:0;padding:0;box-sizing:border-box}
-body{width:%dpx;background:#fff;color:#17191d;padding:18px 16px 20px;
+body{width:%dpx;background:#fff;color:#1a1a1a;padding:18px 16px 20px;
  font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-/* Geen titel, en de datum niet rechtsboven: daar zet de ntfy-app zijn eigen
+/* Twee tekstkleuren: #1a1a1a en #8c8c8c, allebei neutraal grijs.
+   Hierarchie komt van grootte en gewicht, niet van meer tinten.
+   Geen titel, en de datum niet rechtsboven: daar zet de ntfy-app zijn eigen
    icoon overheen. Hij staat nu rechts in het startblok. */
-.datum{font-size:12px;color:#9a9a92;font-weight:600;margin-left:auto;
+.datum{font-size:12px;color:#8c8c8c;font-weight:600;margin-left:auto;
  align-self:center;flex:none}
 
 .start{margin-top:0;border:1.5px solid #e6e6e6;background:#fff;
  border-radius:16px;padding:13px 16px 14px}
-.start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#6a7280}
+.start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8c8c8c}
 /* Twee kolommen: de tijd links, de details ernaast. Onder elkaar bleef er
    een halve kaart wit over. */
 .start .rij2{display:flex;align-items:center;gap:14px;margin-top:3px}
 .start .tijd{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1;
- color:#17191d;flex:none}
-.start .les{font-size:13px;color:#5f6a75;line-height:1.45;min-width:0}
-.start .les b{display:block;font-weight:700;color:#3a4049;font-size:14px}
+ color:#1a1a1a;flex:none}
+.start .les{font-size:13px;color:#8c8c8c;line-height:1.45;min-width:0}
+.start .les b{display:block;font-weight:700;color:#1a1a1a;font-size:14px}
 .start .reden{display:inline-block;margin-top:10px;font-size:12.5px;font-weight:700;
  color:#a8481f;background:#fbeee6;border-radius:8px;padding:5px 10px}
 
-h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16px 0 4px}
+h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8c8c8c;margin:16px 0 4px}
 .rij{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid #eeeeee}
 .rij:last-child{border-bottom:none}
 .chip{width:36px;height:36px;border-radius:11px;flex:none;display:flex;
@@ -75,20 +77,20 @@ h2{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#8e8e86;margin:16
 .mid{flex:1;min-width:0}
 .vak{font-size:16.5px;font-weight:650;line-height:1.2;white-space:nowrap;
  overflow:hidden;text-overflow:ellipsis}
-.sub{font-size:12.5px;color:#84847c;margin-top:2px;white-space:nowrap;
+.sub{font-size:12.5px;color:#8c8c8c;margin-top:2px;white-space:nowrap;
  overflow:hidden;text-overflow:ellipsis}
 .rechts{text-align:right;white-space:nowrap;flex:none;padding-left:6px}
 .rechts .groot{font-size:15px;font-weight:800;line-height:1.15}
-.rechts .was{font-size:12px;color:#a6a69e;text-decoration:line-through;display:block;margin-top:1px}
-.rechts .klok{font-size:13px;color:#6b6b63;font-weight:700;display:block;
+.rechts .was{font-size:12px;color:#8c8c8c;text-decoration:line-through;display:block;margin-top:1px}
+.rechts .klok{font-size:13px;color:#8c8c8c;font-weight:700;display:block;
  margin-top:1px;font-variant-numeric:tabular-nums}
-.rechts .voor{font-size:11.5px;color:#9a9a92;font-weight:700;display:block;
+.rechts .voor{font-size:11.5px;color:#8c8c8c;font-weight:700;display:block;
  letter-spacing:.02em;margin-bottom:1px}
-.rechts .tel{font-size:11.5px;color:#9a9a92;font-weight:700;display:block;margin-top:1px}
-.uitval .vak{color:#8c8c84;text-decoration:line-through;
+.rechts .tel{font-size:11.5px;color:#8c8c8c;font-weight:700;display:block;margin-top:1px}
+.uitval .vak{color:#8c8c8c;text-decoration:line-through;
  text-decoration-color:#cf4d42;text-decoration-thickness:2px}
-.tijdwinst{color:#17191d} .gat{color:#8a8a82}
-.d0{color:#17191d} .d1{color:#3f3f3a} .dv{color:#8a8a82}
+.tijdwinst{color:#1a1a1a} .gat{color:#8c8c8c}
+.d0{color:#1a1a1a} .d1{color:#1a1a1a} .dv{color:#8c8c8c}
 """ % BREEDTE
 
 
