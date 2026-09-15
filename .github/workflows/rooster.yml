@@ -7,7 +7,9 @@ on:
     # Voor 07:00 zet de school nog niets bij; eerder kijken heeft geen zin.
     - cron: "15 7 * * 1-5"     # ochtendbericht
       timezone: "Europe/Amsterdam"
-    - cron: "0 7-17 * * 1-5"   # elk uur tijdens schooltijd
+    # Niet op het hele uur: dat is volgens de documentatie het drukste moment,
+    # en dan worden runs niet alleen vertraagd maar soms weggegooid.
+    - cron: "20 7-17 * * 1-5"  # elk uur tijdens schooltijd
       timezone: "Europe/Amsterdam"
     - cron: "45 18 * * 0-4"    # morgen alvast weten, avond voor een schooldag
       timezone: "Europe/Amsterdam"
