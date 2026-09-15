@@ -126,7 +126,7 @@ def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             kl = "gat" if v["positie"] == "midden" else "tijdwinst"
             klok = (f'<span class="klok">{html.escape(v["klok"])}</span>'
                     if v.get("klok") else "")
-            d.append(_rij(v["vak"], f'{v["dag"]} {v["uur"]}e · {v["tijd"]}',
+            d.append(_rij(v["vak"], f'{v["dag"]} · {v["tijd"]}',
                           f'<span class="groot {kl}">{html.escape(v["gevolg"])}</span>{klok}',
                           "uitval"))
 
@@ -134,7 +134,7 @@ def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
         d.append("<h2>GEWIJZIGD</h2>")
         for v in gewijzigd:
             was = f'<span class="was">{html.escape(v["was"])}</span>' if v.get("was") else ""
-            d.append(_rij(v["vak"], f'{v["label"]} · {v["dag"]} {v["uur"]}e',
+            d.append(_rij(v["vak"], f'{v["label"]} · {v["dag"]}',
                           f'<span class="groot">{html.escape(v["nu"])}</span>{was}'))
 
     if toetsen:
@@ -167,10 +167,12 @@ def teken_kaart(start, uitval, gewijzigd, toetsen, vandaag, uitvoer) -> str:
                 browser = pw.chromium.launch(channel="chrome")
             except Exception:
                 browser = pw.chromium.launch()
-            pagina = browser.new_page(viewport={"width": BREEDTE, "height": 600},
+            pagina = browser.new_page(viewport={"width": BREEDTE, "height": 200},
                                       device_scale_factor=SCHAAL)
             pagina.goto(f"file://{pad}")
-            pagina.screenshot(path=uitvoer, full_page=True)
+            # Op het body-element knippen; full_page zou het venster volgen en
+            # een lap wit onder de kaart laten staan.
+            pagina.locator("body").screenshot(path=uitvoer)
             browser.close()
     finally:
         os.unlink(pad)

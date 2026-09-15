@@ -59,6 +59,20 @@ TIMEOUT = 30
 # Zonder User-Agent blokkeert de edge van Somtoday met HTTP 403.
 USER_AGENT = "somtoday-rooster/1.0 (python-urllib)"
 
+
+def nu_nl() -> dt.datetime:
+    """De huidige tijd in Nederland, zonder tijdzone-info.
+
+    De API geeft lestijden zonder zone ("2026-09-15T09:00:00"), dus we
+    vergelijken met een even naieve klok. Cruciaal op een GitHub-runner: die
+    draait op UTC en loopt dus een of twee uur achter op de schooldag.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return dt.datetime.now(ZoneInfo("Europe/Amsterdam")).replace(tzinfo=None)
+    except Exception:
+        return dt.datetime.now()
+
 _CODE_RE = re.compile(r"[?&]code=([^&\s\"'<>;,]+)")
 _STATE_RE = re.compile(r"[?&]state=([^&\s\"'<>;,]+)")
 
@@ -699,7 +713,7 @@ def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
                    else "morgen" if datum == nu.date() + dt.timedelta(days=1)
                    else f"{DAGNAMEN[datum.weekday()]} {datum.day} {MAANDEN[datum.month - 1]}")
         if not doorgaand:
-            return {"dag": dagnaam, "geen_les": True}
+            return {"dag": dagnaam, "geen_les": True, "datum": datum}
 
         eerste = doorgaand[0]
         vervallen_ervoor = [l for l in lessen
@@ -715,7 +729,7 @@ def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
             uren = [str(l.get("lesuur")) for l in vervallen_ervoor]
             reden = (f"{uren[0]}e uur vervalt" if len(uren) == 1
                      else f"{' en '.join(uren)}e uur vervallen")
-        return {"dag": dagnaam, "soort": soort, "reden": reden,
+        return {"dag": dagnaam, "soort": soort, "reden": reden, "datum": datum,
                 "tijd": eerste["_begin"].strftime("%H:%M"),
                 "uur": eerste.get("lesuur"), "vak": eerste.get("vak"),
                 "lokaal": eerste.get("lokaal")}
@@ -725,17 +739,18 @@ def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
 def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) -> tuple:
     """Zet de komende dagen om in de secties van de kaart."""
     per_dag = _lessen_per_dag(snapshots)
-    grens = nu + dt.timedelta(days=dagen)
+    blok = startblok(per_dag, nu)
     uitval, gewijzigd = [], []
 
-    for datum in sorted(per_dag):
-        lessen = per_dag[datum]
+    # Uitval en wijzigingen gaan alleen over de dag die het startblok toont:
+    # 's ochtends vandaag, 's avonds morgen. Verder vooruit is ruis - daarvoor
+    # is de tekst van de melding.
+    dagen_in_beeld = [blok["datum"]] if blok and blok.get("datum") else []
+    for datum in dagen_in_beeld:
+        lessen = per_dag.get(datum, [])
         doorgaand = [l for l in lessen if not _vervalt(l)]
         for les in lessen:
-            if not (nu <= les["_begin"] <= grens):
-                continue
-            dag = DAGNAMEN[datum.weekday()]
-            basis = {"vak": les.get("vak") or "?", "dag": dag,
+            basis = {"vak": les.get("vak") or "?", "dag": f'{les.get("lesuur")}e uur',
                      "uur": les.get("lesuur"), "tijd": les["_begin"].strftime("%H:%M")}
 
             if _vervalt(les):
@@ -773,14 +788,16 @@ def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) ->
             if not wanneer:
                 continue
             resterend = (wanneer.date() - nu.date()).days
-            if 0 <= resterend <= vooruit:
+            # Een toets die al geweest is heeft geen aftelling meer nodig; om
+            # 20:00 nog "VANDAAG" tonen voor iets van vanochtend is onzin.
+            if wanneer > nu and 0 <= resterend <= vooruit:
                 toetsen.append({"vak": rec.get("vak") or "?", "wat": rec.get("onderwerp") or "?",
                                 "dagen": resterend, "_s": wanneer})
     toetsen.sort(key=lambda t: t["_s"])
     for t in toetsen:
         t.pop("_s")
 
-    return startblok(per_dag, nu), uitval, gewijzigd, toetsen
+    return blok, uitval, gewijzigd, toetsen
 
 
 def kaartkop(start: dict | None) -> str:
@@ -804,7 +821,7 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
     leerling_id = leerling["links"][0]["id"]
     naam = " ".join(x for x in (leerling.get("roepnaam"), leerling.get("achternaam")) if x)
 
-    nu = dt.datetime.now()
+    nu = nu_nl()
     tot = nu + dt.timedelta(days=dagen)
 
     # Wijzigingen melden we alleen vlak vooruit, maar voor de aftelling naar
