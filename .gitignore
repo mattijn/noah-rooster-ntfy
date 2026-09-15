@@ -7,3 +7,5 @@ __pycache__/
 
 # state.json en tokens.enc horen er juist wel in: de Action heeft ze nodig
 # om tussen runs te onthouden wat de vorige stand was.
+
+kaart.png

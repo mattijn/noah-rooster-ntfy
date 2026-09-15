@@ -657,7 +657,8 @@ def kaartkop(winst: list[dict], bosses: list[dict]) -> str:
     return "Rooster update"
 
 
-def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool) -> None:
+def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
+             kaart: bool = False) -> None:
     tokens = load_tokens()
     token, api_url = refresh_access_token(tokens)
     students = api_get(api_url, token, "/rest/v1/leerlingen")
@@ -731,14 +732,32 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool) 
 
     if not notify or not (regels or altijd):
         return
+
     delen = list(regels)
     if agenda:
         if delen:
             delen.append("")
         delen.append("Op de agenda:")
         delen += agenda
-    stuur_notificatie(kop, "\n".join(delen) or "Geen wijzigingen.")
-    print("\n-> notificatie verstuurd")
+    tekst = "\n".join(delen) or "Geen wijzigingen."
+
+    bijlage = None
+    if kaart:
+        winst, verschuivingen, bosses = kaartgegevens(verse, nu, dagen, vooruit)
+        if winst or verschuivingen or bosses:
+            try:
+                from rooster_kaart import teken_kaart
+                _, week_nu, _ = nu.isocalendar()
+                bijlage = teken_kaart(winst, verschuivingen, bosses, week_nu,
+                                      os.path.join(_HERE, "kaart.png"))
+                kop = kaartkop(winst, bosses)
+                print(f"kaart: {bijlage}")
+            except Exception as err:
+                # Een mislukte kaart mag de melding zelf nooit tegenhouden.
+                print(f"kaart overgeslagen ({type(err).__name__}: {err})")
+
+    stuur_notificatie(kop, tekst, bijlage)
+    print("\n-> notificatie verstuurd" + (" met kaart" if bijlage else ""))
 
 
 def main() -> None:
@@ -756,12 +775,13 @@ def main() -> None:
     c.add_argument("--reset", action="store_true", help="beginstand opnieuw vastleggen")
     c.add_argument("--vooruit", type=int, default=14, help="aftelling naar toetsen, in dagen (standaard 14)")
     c.add_argument("--altijd", action="store_true", help="ook pushen als er niets gewijzigd is")
+    c.add_argument("--kaart", action="store_true", help="patch notes-kaart meesturen (vereist playwright)")
 
     args = parser.parse_args()
     if args.cmd == "login":
         do_login()
     elif args.cmd == "check":
-        do_check(args.dagen, args.notify, args.reset, args.vooruit, args.altijd)
+        do_check(args.dagen, args.notify, args.reset, args.vooruit, args.altijd, args.kaart)
     else:
         show_rooster(args.week, args.json, args.leerling)
 
