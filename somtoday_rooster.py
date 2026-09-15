@@ -420,9 +420,6 @@ def _snapshot(items: list[dict], huiswerk: list[dict]) -> dict:
             "eind": a.get("eindDatumTijd"),
             "lesuur": a.get("beginLesuur"),
             "vak": (a.get("vak") or {}).get("naam") or a.get("titel"),
-            # Een uitgevallen les heeft geen vakobject; dan blijft alleen een
-            # korte code over ("mu"). vul_vaknamen() repareert dat achteraf.
-            "vak_bekend": bool((a.get("vak") or {}).get("naam")),
             "lokaal": a.get("locatie"),
             # De API levert docentNamen niet in een vaste volgorde; sorteren
             # voorkomt meldingen over een wijziging die er niet is.
@@ -602,16 +599,24 @@ def komende_toetsen(snapshots: dict, nu: dt.datetime, vooruit: int) -> list[str]
     return regels
 
 
+def _is_vakcode(naam: str | None) -> bool:
+    """Herken een afkorting als vaknaam: 'tn', 'mu', 'lo', 'm'.
+
+    Somtoday levert voor sommige lessen (waaronder de uitgevallen) alleen de
+    afkorting, terwijl hetzelfde vak elders voluit staat. Echte namen zijn
+    langer of beginnen met een hoofdletter; 'KWT' valt er dus buiten.
+    """
+    return bool(naam) and len(naam) <= 3 and naam.islower() and naam.isalpha()
+
+
 def vul_vaknamen(snapshots: dict) -> None:
-    """Vervang korte codes van uitgevallen lessen door de echte vaknaam.
+    """Vervang afkortingen door de volledige vaknaam.
 
-    Een uitgevallen les komt zonder vakobject binnen; er blijft een code over
-    ("mu"). Dezelfde les staat in een andere week wel compleet in de data, dus
-    we zoeken hem daar op via docent+lokaal, en anders via weekdag+lesuur.
-
-    Beide sleutels zijn soms dubbelzinnig: een docent geeft meerdere vakken, en
-    een lesuur wisselt per week. We vullen daarom alleen in als er precies een
-    kandidaat is. Een code laten staan is beter dan de verkeerde naam tonen.
+    Dezelfde les staat in een andere week wel voluit in de data, dus we zoeken
+    hem op via docent+lokaal en anders via weekdag+lesuur. Beide sleutels zijn
+    soms dubbelzinnig (een docent geeft meerdere vakken, een lesuur wisselt per
+    week), dus we vullen alleen in bij precies een kandidaat. Een afkorting
+    laten staan is beter dan de verkeerde naam tonen.
     """
     def moment(les: dict):
         try:
@@ -623,14 +628,14 @@ def vul_vaknamen(snapshots: dict) -> None:
     op_dag_uur: dict[tuple, set] = {}
     for snap in snapshots.values():
         for les in snap.get("lessen", {}).values():
-            if not les.get("vak_bekend") or not (wanneer := moment(les)):
+            if _is_vakcode(les.get("vak")) or not (wanneer := moment(les)):
                 continue
             op_docent_lokaal.setdefault((les.get("docent"), les.get("lokaal")), set()).add(les["vak"])
             op_dag_uur.setdefault((wanneer.weekday(), les.get("lesuur")), set()).add(les["vak"])
 
     for snap in snapshots.values():
         for les in snap.get("lessen", {}).values():
-            if les.get("vak_bekend") or not (wanneer := moment(les)):
+            if not _is_vakcode(les.get("vak")) or not (wanneer := moment(les)):
                 continue
             for kaart, sleutel in ((op_docent_lokaal, (les.get("docent"), les.get("lokaal"))),
                                    (op_dag_uur, (wanneer.weekday(), les.get("lesuur")))):
