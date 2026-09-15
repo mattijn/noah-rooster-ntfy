@@ -2,10 +2,14 @@ name: Rooster
 
 on:
   schedule:
-    # Tijden in UTC. Nederland is 's zomers UTC+2, 's winters UTC+1.
-    - cron: "30 4 * * 1-5"     # 06:30 NL (zomer): ochtendbericht
-    - cron: "0 5-15 * * 1-5"   # elk uur tijdens schooltijd
-    - cron: "30 15 * * 0-4"    # 17:30 NL (zomer): morgen alvast weten
+    # Met een tijdzone per regel; zonder dat zou alles UTC zijn en twee keer
+    # per jaar een uur verschuiven.
+    - cron: "30 6 * * 1-5"     # ochtendbericht
+      timezone: "Europe/Amsterdam"
+    - cron: "0 7-17 * * 1-5"   # elk uur tijdens schooltijd
+      timezone: "Europe/Amsterdam"
+    - cron: "30 17 * * 0-4"    # morgen alvast weten, avond voor een schooldag
+      timezone: "Europe/Amsterdam"
   workflow_dispatch:
     inputs:
       altijd:
@@ -31,6 +35,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Zodat we na de eerste geplande run kunnen zien wat github.event.schedule
+      # teruggeeft nu er een tijdzone bij staat; daar hangt het vaste bericht op.
+      - name: Welke planning trok dit
+        run: echo "schedule=[${{ github.event.schedule }}] event=${{ github.event_name }}"
+
       - name: Playwright
         run: pip install --quiet playwright
 
@@ -47,7 +56,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           # De ochtendrun stuurt altijd een bericht met de agenda; de uurruns
           # alleen als er echt iets gewijzigd is.
-          ALTIJD: ${{ (github.event.schedule == '30 4 * * 1-5' || github.event.schedule == '30 15 * * 0-4' || inputs.altijd) && '--altijd' || '' }}
+          ALTIJD: ${{ (github.event.schedule == '30 6 * * 1-5' || github.event.schedule == '30 17 * * 0-4' || inputs.altijd) && '--altijd' || '' }}
         run: python3 somtoday_rooster.py check --notify --kaart --dagen 3 --vooruit 14 $ALTIJD
 
       # Moet ook draaien als de stap hierboven faalt: het token kan dan al
