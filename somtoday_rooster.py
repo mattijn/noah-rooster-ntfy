@@ -37,6 +37,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from vakiconen import roepnaam
+
 # --- constanten (zelfde publieke app-client als de Somtoday-app) ------------
 AUTHORIZE_URL = "https://inloggen.somtoday.nl/oauth2/authorize"
 TOKEN_URL = "https://inloggen.somtoday.nl/oauth2/token"
@@ -674,7 +676,8 @@ _WAS_LOKAAL = re.compile(r"lokaal.*?\(was\s+([^)]+)\)", re.I)
 _WAS_TIJD = re.compile(r"verplaatst.*?van\s+\w*\s*(\d{1,2}[:.]\d{2})", re.I)
 
 
-def dagaanduiding(doel: dt.date, vandaag: dt.date) -> tuple[str | None, str]:
+def dagaanduiding(doel: dt.date, vandaag: dt.date,
+                  overmorgen: bool = False) -> tuple[str | None, str]:
     """Noem een dag zoals een mens dat doet.
 
     Geeft (voorvoegsel, dag) terug: vandaag, morgen, anders de dagnaam binnen
@@ -687,6 +690,8 @@ def dagaanduiding(doel: dt.date, vandaag: dt.date) -> tuple[str | None, str]:
         return None, "vandaag"
     if verschil == 1:
         return None, "morgen"
+    if overmorgen and verschil == 2:
+        return None, "overmorgen"
     naam = VOLLE_DAGNAMEN[doel.weekday()]
     # Verschil in kalenderweken, via de maandag van elke week; dat werkt ook
     # over een jaargrens heen.
@@ -833,13 +838,82 @@ def kaartgegevens(snapshots: dict, nu: dt.datetime, vooruit: int) -> tuple:
             # 20:00 nog "VANDAAG" tonen voor iets van vanochtend is onzin.
             if wanneer > nu and 0 <= resterend <= vooruit:
                 voor, dag = dagaanduiding(wanneer.date(), nu.date())
+                # Het lesuur staat niet in de toekenning; we vinden het via de
+                # les die op hetzelfde tijdstip begint.
+                les = next((l for l in per_dag.get(wanneer.date(), [])
+                            if l["_begin"] == wanneer), None)
+                is_toets, merk = toetssoort(rec.get("onderwerp"), rec.get("type"))
                 toetsen.append({"vak": rec.get("vak") or "?", "wat": rec.get("onderwerp") or "?",
-                                "dagen": resterend, "voor": voor, "dag": dag, "_s": wanneer})
+                                "dagen": resterend, "voor": voor, "dag": dag,
+                                "toets": is_toets, "merk": merk,
+                                "uur": les.get("lesuur") if les else None,
+                                "_datum": wanneer.date(), "_s": wanneer})
     toetsen.sort(key=lambda t: t["_s"])
     for t in toetsen:
         t.pop("_s")
 
     return blok, uitval, gewijzigd, toetsen
+
+
+def toetssoort(onderwerp: str, api_type: str | None) -> tuple[bool, str | None]:
+    """Is dit een toets, en hoe noemt de docent het?
+
+    Het type uit Somtoday is onbetrouwbaar: een SO wordt geregeld als HUISWERK
+    ingevoerd. Wat de docent in het onderwerp schrijft is leidend, want dat is
+    ook wat de leerling leest.
+    """
+    woorden = re.findall(r"[a-zA-Z]+", (onderwerp or "").lower())
+    for woord, merk in (("so", "SO"), ("repetitie", "repetitie"),
+                        ("proefwerk", "proefwerk"), ("pw", "PW"),
+                        ("overhoring", "overhoring"), ("tentamen", "tentamen")):
+        if woord in woorden:
+            return True, merk
+    if "toets" in woorden:
+        return True, None
+    return api_type in ("TOETS", "GROTE_TOETS"), None
+
+
+def gesproken_tijd(tijd: str) -> str:
+    """09:00 wordt "9 uur"; een tijd met minuten laten we staan."""
+    uur, _, minuut = tijd.partition(":")
+    return f"{int(uur)} uur" if minuut == "00" else tijd
+
+
+def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
+              nu: dt.datetime) -> tuple[str, str]:
+    """Bouw titel en body van de melding.
+
+    Kort houden: de kaart eronder heeft de details al. De titel zegt wanneer
+    school begint, de body groepeert wat eraan komt per dag.
+    """
+    if not blok:
+        titel = "Rooster bijgewerkt"
+    elif blok.get("geen_les"):
+        titel = f"Geen les {blok['dag']}"
+    else:
+        wanneer = "straks" if blok["dag"] == "vandaag" else blok["dag"]
+        titel = f"School begint {wanneer} om {gesproken_tijd(blok['tijd'])}"
+
+    regels: list[str] = []
+    if wijzigingen:
+        regels += [w.lower() for w in wijzigingen]
+        regels.append("")
+
+    per_dag: dict[str, list[str]] = {}
+    for t in toetsen:
+        voor, dag = dagaanduiding(t["_datum"], nu.date(), overmorgen=True)
+        kop = f"{voor} {dag}" if voor else dag
+        soort = "toets" if t["toets"] else "huiswerk"
+        tussen = [x for x in (t.get("merk"), f"{t['uur']}e uur" if t.get("uur") else None) if x]
+        haakjes = f" ({', '.join(tussen)})" if tussen else ""
+        per_dag.setdefault(kop, []).append(f"* {roepnaam(t['vak'])} {soort}{haakjes}")
+
+    for kop, items in per_dag.items():
+        if regels and regels[-1] != "":
+            regels.append("")
+        regels.append(kop)
+        regels += items
+    return titel, "\n".join(regels).strip()
 
 
 def kaartkop(start: dict | None) -> str:
@@ -928,28 +1002,20 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
     if not notify or not (regels or altijd):
         return
 
-    delen = list(regels)
-    if agenda:
-        if delen:
-            delen.append("")
-        delen.append("Op de agenda:")
-        delen += agenda
-    tekst = "\n".join(delen) or "Geen wijzigingen."
+    blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, vooruit)
+    kop, tekst = meldtekst(blok, toetsen, regels, nu)
 
     bijlage = None
-    if kaart:
-        blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, vooruit)
-        if blok or uitval or gewijzigd_l or toetsen:
-            try:
-                from rooster_kaart import teken_kaart
-                datumtekst = f"{DAGNAMEN[nu.weekday()]} {nu.day} {MAANDEN[nu.month - 1]}"
-                bijlage = teken_kaart(blok, uitval, gewijzigd_l, toetsen, datumtekst,
-                                      os.path.join(_HERE, "kaart.png"))
-                kop = kaartkop(blok)
-                print(f"kaart: {bijlage}")
-            except Exception as err:
-                # Een mislukte kaart mag de melding zelf nooit tegenhouden.
-                print(f"kaart overgeslagen ({type(err).__name__}: {err})")
+    if kaart and (blok or uitval or gewijzigd_l or toetsen):
+        try:
+            from rooster_kaart import teken_kaart
+            datumtekst = f"{DAGNAMEN[nu.weekday()]} {nu.day} {MAANDEN[nu.month - 1]}"
+            bijlage = teken_kaart(blok, uitval, gewijzigd_l, toetsen, datumtekst,
+                                  os.path.join(_HERE, "kaart.png"))
+            print(f"kaart: {bijlage}")
+        except Exception as err:
+            # Een mislukte kaart mag de melding zelf nooit tegenhouden.
+            print(f"kaart overgeslagen ({type(err).__name__}: {err})")
 
     stuur_notificatie(kop, tekst, bijlage)
     print("\n-> notificatie verstuurd" + (" met kaart" if bijlage else ""))

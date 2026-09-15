@@ -67,3 +67,28 @@ def icoon_voor(vak: str) -> str:
         if sleutel in k:
             return ICONEN[naam]
     return ICONEN[STANDAARD]
+
+
+# Hoe de school een vak noemt, en hoe een leerling het noemt.
+ROEPNAMEN = {
+    "lichamelijke opvoeding": "gym",
+    "mentor uur": "mentoruur",
+    "kunstzinnige vorming": "kunst",
+    "verzorging": "verzorging",
+}
+
+
+def roepnaam(vak: str) -> str:
+    """Geef de naam die een leerling gebruikt.
+
+    "Duitse taal" is hoe Somtoday het noemt; "duits" is hoe hij het noemt.
+    Talen volgen een regel (het bijvoeglijk naamwoord zonder slot-e, zonder
+    "taal"), de rest staat in ROEPNAMEN.
+    """
+    k = (vak or "").lower().strip()
+    if k in ROEPNAMEN:
+        return ROEPNAMEN[k]
+    if k.endswith(" taal"):
+        woord = k[:-5].strip()
+        return woord[:-1] if woord.endswith("e") else woord
+    return k

@@ -18,7 +18,7 @@ import html
 import os
 import tempfile
 
-from vakiconen import icoon_voor
+from vakiconen import icoon_voor, roepnaam
 
 BREEDTE = 400  # css-punten: ongeveer de breedte van een melding op een telefoon
 SCHAAL = 3     # retina
@@ -45,12 +45,12 @@ CSS = """
 *{margin:0;padding:0;box-sizing:border-box}
 body{width:%dpx;background:#fcfcfa;color:#17191d;padding:18px 16px 20px;
  font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-.kop{display:flex;justify-content:space-between;align-items:baseline;
- padding-bottom:11px;border-bottom:1.5px solid #e7e6e1}
-.kop b{font-size:18px;font-weight:800;letter-spacing:-.01em}
-.kop span{font-size:12px;color:#8e8e86;font-weight:600}
+/* Geen titel, en de datum niet rechtsboven: daar zet de ntfy-app zijn eigen
+   icoon overheen. Hij staat nu rechts in het startblok. */
+.datum{font-size:12px;color:#9a9a92;font-weight:600;margin-left:auto;
+ align-self:center;flex:none}
 
-.start{margin-top:14px;border:1.5px solid #e0e4e8;background:#f4f6f8;
+.start{margin-top:0;border:1.5px solid #e0e4e8;background:#f4f6f8;
  border-radius:16px;padding:13px 16px 14px}
 .start .label{font-size:10.5px;letter-spacing:.15em;font-weight:800;color:#6a7280}
 /* Twee kolommen: de tijd links, de details ernaast. Onder elkaar bleef er
@@ -107,20 +107,22 @@ def _chip(vak: str) -> str:
 
 def _rij(vak: str, sub: str, rechts: str, klasse: str = "") -> str:
     return (f'<div class="rij {klasse}">{_chip(vak)}<div class="mid">'
-            f'<div class="vak">{html.escape(klein(vak))}</div>'
+            f'<div class="vak">{html.escape(klein(roepnaam(vak)))}</div>'
             f'<div class="sub">{html.escape(klein(sub))}</div></div>'
             f'<div class="rechts">{rechts}</div></div>')
 
 
 def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
               vandaag: str) -> str:
-    d = [f'<div class="kop"><b>rooster</b><span>{html.escape(klein(vandaag))}</span></div>']
+    d = []
+    datum = f'<div class="datum">{html.escape(klein(vandaag))}</div>' 
 
     if start:
         if start.get("geen_les"):
             d.append(f'<div class="start"><div class="label">'
                      f'{klein(start["dag"])}</div>'
-                     f'<div class="rij2"><div class="tijd">geen les</div></div></div>')
+                     f'<div class="rij2"><div class="tijd">geen les</div>'
+                     f'{datum}</div></div>')
         else:
             reden = (f'<div class="reden">{html.escape(klein(start["reden"]))}</div>'
                      if start.get("reden") else "")
@@ -128,8 +130,9 @@ def bouw_html(start: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             d.append(f'<div class="start">'
                      f'<div class="label">{klein(start["dag"])} begin je om</div>'
                      f'<div class="rij2"><div class="tijd">{start["tijd"]}</div>'
-                     f'<div class="les"><b>{html.escape(klein(start["vak"] or ""))}</b>'
-                     f'{start["uur"]}e uur{html.escape(lokaal)}</div></div>{reden}</div>')
+                     f'<div class="les"><b>{html.escape(klein(roepnaam(start["vak"] or "")))}</b>'
+                     f'{start["uur"]}e uur{html.escape(lokaal)}</div>'
+                     f'{datum}</div>{reden}</div>')
 
     if uitval:
         d.append("<h2>uitval</h2>")
