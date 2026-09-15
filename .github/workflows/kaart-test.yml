@@ -1,0 +1,43 @@
+name: Kaart-test
+
+# Alleen handmatig: dit is om te zien of de kaart op een Linux-runner net zo
+# rendert als op de Mac. Vooral kleuren-emoji is daar niet vanzelfsprekend.
+on:
+  workflow_dispatch:
+    inputs:
+      emoji_font:
+        description: "fonts-noto-color-emoji installeren"
+        type: boolean
+        default: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Wat staat er al?
+        run: |
+          echo "--- chrome ---"
+          which google-chrome chromium-browser chromium 2>/dev/null || echo "geen in PATH"
+          google-chrome --version 2>/dev/null || true
+          echo "--- emoji-fonts ---"
+          fc-list 2>/dev/null | grep -i -E "emoji|noto color" || echo "GEEN emoji-font gevonden"
+
+      - name: Emoji-font installeren
+        if: inputs.emoji_font
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-color-emoji
+
+      - name: Playwright
+        run: pip install --quiet playwright
+
+      - name: Kaart renderen
+        run: python3 rooster_kaart.py kaart-linux.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaart-linux
+          path: kaart-linux.png

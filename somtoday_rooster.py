@@ -517,7 +517,7 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime) -> list[str]:
     return regels
 
 
-def stuur_notificatie(titel: str, tekst: str) -> None:
+def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> None:
     """Push via ntfy. Leest server en topic uit config.json."""
     cfg = {}
     if os.path.exists(CONFIG_FILE):
@@ -528,15 +528,22 @@ def stuur_notificatie(titel: str, tekst: str) -> None:
     if not topic:
         raise SystemExit("Geen ntfy-topic: zet NTFY_TOPIC of vul config.json.")
     server = (os.environ.get("NTFY_SERVER") or cfg.get("ntfy_server") or "https://ntfy.sh").rstrip("/")
-    req = urllib.request.Request(
-        f"{server}/{topic}",
-        data=tekst.encode("utf-8"),
-        headers={
-            "User-Agent": USER_AGENT,
-            "Title": titel.encode("utf-8").decode("latin-1", "replace"),
-            "Tags": "calendar",
-        },
-    )
+    kop = {
+        "User-Agent": USER_AGENT,
+        # ntfy-headers zijn latin-1; accenten gaan er anders uit met een fout.
+        "Title": titel.encode("utf-8").decode("latin-1", "replace"),
+        "Tags": "calendar",
+    }
+    if bijlage and os.path.exists(bijlage):
+        # Met een bestand als body moet de tekst in een header; ntfy host het
+        # plaatje dan zelf en de app toont het in de melding.
+        with open(bijlage, "rb") as fh:
+            body = fh.read()
+        kop["Filename"] = os.path.basename(bijlage)
+        kop["Message"] = tekst.encode("utf-8").decode("latin-1", "replace")
+        req = urllib.request.Request(f"{server}/{topic}", data=body, headers=kop, method="PUT")
+    else:
+        req = urllib.request.Request(f"{server}/{topic}", data=tekst.encode("utf-8"), headers=kop)
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         if resp.status >= 300:
             raise SystemExit(f"ntfy antwoordde met HTTP {resp.status}")
@@ -582,6 +589,72 @@ def komende_toetsen(snapshots: dict, nu: dt.datetime, vooruit: int) -> list[str]
             f"{merk}  {vak} - {rec['onderwerp']}"
         )
     return regels
+
+
+def kaartgegevens(snapshots: dict, nu: dt.datetime, dagen: int, vooruit: int) -> tuple:
+    """Zet de komende dagen om in de drie secties van de patch notes-kaart.
+
+    Bewust de *stand* van het venster, niet het verschil: de kaart laat zien
+    wat er aan de hand is, de tekst van de melding zegt wat er net veranderde.
+    """
+    dagnamen = ["ma", "di", "wo", "do", "vr", "za", "zo"]
+    grens = nu + dt.timedelta(days=dagen)
+    winst, verschuivingen = [], []
+
+    for snap in snapshots.values():
+        for les in snap.get("lessen", {}).values():
+            try:
+                begin = dt.datetime.fromisoformat((les.get("begin") or "")[:19])
+            except ValueError:
+                continue
+            if not nu <= begin <= grens:
+                continue
+            wijziging = (les.get("wijziging") or "").strip()
+            if not wijziging:
+                continue
+            wanneer = f"{dagnamen[begin.weekday()]} {les.get('lesuur')}e"
+            if "vervalt" in wijziging.lower():
+                try:
+                    eind = dt.datetime.fromisoformat((les.get("eind") or "")[:19])
+                    minuten = max(0, int((eind - begin).total_seconds() // 60))
+                except ValueError:
+                    minuten = 50
+                winst.append({"vak": les.get("vak") or "?", "wanneer": wanneer,
+                              "minuten": minuten, "_sort": begin})
+            else:
+                verschuivingen.append({"vak": les.get("vak") or "?",
+                                       "wanneer": f"{wanneer} uur",
+                                       "wat": wijziging.rstrip("."), "_sort": begin})
+
+    bosses = []
+    for snap in snapshots.values():
+        for rec in snap.get("huiswerk", {}).values():
+            try:
+                wanneer = dt.datetime.fromisoformat((rec.get("datumTijd") or "")[:19])
+            except ValueError:
+                continue
+            resterend = (wanneer.date() - nu.date()).days
+            if not 0 <= resterend <= vooruit:
+                continue
+            bosses.append({"vak": rec.get("vak") or "?", "onderwerp": rec.get("onderwerp") or "?",
+                           "dagen": resterend, "toets": rec.get("type") in ("TOETS", "GROTE_TOETS"),
+                           "_sort": wanneer})
+
+    for lijst in (winst, verschuivingen, bosses):
+        lijst.sort(key=lambda x: x["_sort"])
+        for x in lijst:
+            x.pop("_sort")
+    return winst, verschuivingen, bosses
+
+
+def kaartkop(winst: list[dict], bosses: list[dict]) -> str:
+    """Een titel waar een twaalfjarige op tikt."""
+    if winst:
+        return f"+{sum(w['minuten'] for w in winst)} MIN VRIJ"
+    dichtstbij = min((b for b in bosses if b["toets"]), key=lambda b: b["dagen"], default=None)
+    if dichtstbij and dichtstbij["dagen"] <= 1:
+        return "BOSS INCOMING"
+    return "Rooster update"
 
 
 def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool) -> None:
