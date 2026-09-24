@@ -929,7 +929,7 @@ def _lokaal(lokaal: str | None) -> str:
 
 
 def _toetsdag(datum: dt.date, vandaag: dt.date) -> str:
-    """Vrijdag, dinsdag (nog 3 dagen), volgende week woensdag (nog 8 dagen).
+    """Vrijdag, dinsdag: nog 3 dagen, volgende week woensdag: nog 8 dagen.
 
     Geen datum: die moet je omrekenen. De dagnaam zegt wanneer, de aftelling
     hoe dichtbij. Nooit "vandaag" of "morgen": de Action loopt soms uren
@@ -940,7 +940,7 @@ def _toetsdag(datum: dt.date, vandaag: dt.date) -> str:
         dag = VOLLE_DAGNAMEN[datum.weekday()]
     dagen = (datum - vandaag).days
     naam = f"{voor} {dag}" if voor else dag
-    return f"{naam} (nog {dagen} dagen)" if dagen >= 2 else naam
+    return f"{naam}: nog {dagen} dagen" if dagen >= 2 else naam
 
 
 def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
@@ -1001,10 +1001,13 @@ def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             # herkennen is genoeg, het gaat om dezelfde dag.
             gedekt.update({(roepnaam(t["vak"]), t.get("uur")), (roepnaam(t["vak"]), None)})
         else:
-            wat = klein(t["wat"])
-            if not t["toets"]:
-                wat = f"{wat} (huiswerk)"
-            later.append(f"- {_toetsdag(t['_datum'], nu.date())}: {roepnaam(t['vak'])} - {wat}")
+            # Het vak voorop, zoals in de regels erboven; wanneer staat achteraan.
+            # Zonder onderwerp zegt de soort genoeg: "geschiedenis toets".
+            wat = klein(t["wat"]) if t["wat"] not in ("", "?") else soort
+            wanneer = _toetsdag(t["_datum"], nu.date())
+            if not t["toets"] and wat != soort:
+                wanneer = f"huiswerk, {wanneer}"
+            later.append(f"- {roepnaam(t['vak'])} {wat} ({wanneer})")
 
     regels += [f"- {w['tekst']}" for w in wijzigingen
                if w["datum"] != hoofddag or (w["vak"], w["uur"]) not in gedekt]

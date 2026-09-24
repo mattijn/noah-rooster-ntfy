@@ -23,9 +23,9 @@ op het lockscherm past. Openklappen geeft de rest.
     - wiskunde vervalt (donderdag, 2e uur)
 
     Toetsen
-    - donderdag (nog 2 dagen): nederlands - boekverslag (huiswerk)
-    - vrijdag (nog 3 dagen): frans - SO woorden
-    - volgende week woensdag (nog 8 dagen): wiskunde - toets hoofdstuk 1
+    - nederlands boekverslag (huiswerk, donderdag: nog 2 dagen)
+    - frans SO woorden (vrijdag: nog 3 dagen)
+    - wiskunde toets hoofdstuk 1 (volgende week woensdag: nog 8 dagen)
 
 De titel noemt de dag bij naam, nooit "morgen": de Action loopt soms uren
 achter, en dan weet je niet meer vanaf wanneer dat gerekend is. Eerst die
