@@ -37,8 +37,6 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from vakiconen import klein, roepnaam
-
 # --- constanten (zelfde publieke app-client als de Somtoday-app) ------------
 AUTHORIZE_URL = "https://inloggen.somtoday.nl/oauth2/authorize"
 TOKEN_URL = "https://inloggen.somtoday.nl/oauth2/token"
@@ -472,13 +470,20 @@ GEVOLGD = {
 
 
 def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
-               hoofddag: dt.date | None = None) -> list[str]:
+               hoofddag: dt.date | None = None) -> list[dict]:
     """Beschrijf wat er veranderd is, in de taal van de melding zelf.
 
     Regels zien eruit als "wiskunde vervalt (donderdag, 2e uur)": eerst het
     vak, dan wat ermee gebeurt, en tussen haakjes waar je het terugvindt.
+    Bij elke regel staan dag, vak en lesuur, zodat de melding kan zien of het
+    dagoverzicht dezelfde les al noemt.
     """
-    regels: list[str] = []
+    regels: list[dict] = []
+
+    def meld(rec: dict, tekst: str) -> None:
+        wanneer = _tijdstip(rec.get("begin") or rec.get("datumTijd"))
+        regels.append({"tekst": tekst, "datum": wanneer.date() if wanneer else None,
+                       "vak": roepnaam(rec.get("vak") or "?"), "uur": rec.get("lesuur")})
 
     def binnen(begin: str | None) -> bool:
         # Wijzigingen blijven over het hele venster gaan; alleen de dagnaam
@@ -504,7 +509,7 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
         vak = roepnaam(na.get("vak") or "?")
         voor = oude_lessen.get(sleutel)
         if voor is None:
-            regels.append(f"{vak} erbij{plek(na)}")
+            meld(na, f"{vak} erbij{plek(na)}")
             continue
         for veld in GEVOLGD:
             if voor.get(veld) == na.get(veld):
@@ -514,23 +519,23 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
             was, wordt = voor.get(veld) or "", na.get(veld) or ""
             if veld == "wijziging":
                 if not wordt:
-                    regels.append(f"{vak} gaat toch door{plek(na)}")
+                    meld(na, f"{vak} gaat toch door{plek(na)}")
                 elif "vervalt" in wordt.lower():
-                    regels.append(f"{vak} vervalt{plek(na)}")
+                    meld(na, f"{vak} vervalt{plek(na)}")
                 else:
-                    regels.append(f"{vak}: {klein(wordt.rstrip('.'))}{plek(na)}")
+                    meld(na, f"{vak}: {klein(wordt.rstrip('.'))}{plek(na)}")
             elif veld == "begin":
-                regels.append(f"{vak} begint om {str(wordt)[11:16]}{plek(na)}")
+                meld(na, f"{vak} begint om {str(wordt)[11:16]}{plek(na)}")
             elif veld == "lokaal":
-                regels.append(f"{vak} in {wordt}{plek(na)}")
+                meld(na, f"{vak} in {wordt}{plek(na)}")
             elif veld == "docent":
-                regels.append(f"{vak} met {klein(wordt)}{plek(na)}")
+                meld(na, f"{vak} met {klein(wordt)}{plek(na)}")
             else:
-                regels.append(f"{vak}: {was} wordt {wordt}{plek(na)}")
+                meld(na, f"{vak}: {was} wordt {wordt}{plek(na)}")
 
     for sleutel, voor in oude_lessen.items():
         if binnen(voor.get("begin")) and sleutel not in nieuwe_lessen:
-            regels.append(f"{roepnaam(voor.get('vak') or '?')} weg uit het rooster{plek(voor)}")
+            meld(voor, f"{roepnaam(voor.get('vak') or '?')} weg uit het rooster{plek(voor)}")
 
     oud_werk, nieuw_werk = oud.get("huiswerk", {}), nieuw.get("huiswerk", {})
     for sleutel, na in nieuw_werk.items():
@@ -539,8 +544,8 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
         is_toets, merk = toetssoort(na.get("onderwerp"), na.get("type"))
         soort = "toets" if is_toets else "huiswerk"
         merking = f" ({merk})" if merk else ""
-        regels.append(f"nieuwe {soort}{merking}: {roepnaam(na.get('vak') or '?')}"
-                      f" - {klein(na.get('onderwerp') or '')}{plek(na)}")
+        meld(na, f"nieuwe {soort}{merking}: {roepnaam(na.get('vak') or '?')}"
+                 f" - {klein(na.get('onderwerp') or '')}{plek(na)}")
     return regels
 
 
@@ -550,7 +555,7 @@ def _headerwaarde(tekst: str) -> str:
     return plat.encode("utf-8").decode("latin-1", "replace")
 
 
-def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> None:
+def stuur_notificatie(titel: str, tekst: str) -> None:
     """Push via ntfy. Leest server en topic uit config.json."""
     cfg = {}
     if os.path.exists(CONFIG_FILE):
@@ -566,18 +571,7 @@ def stuur_notificatie(titel: str, tekst: str, bijlage: str | None = None) -> Non
         # ntfy-headers zijn latin-1; accenten gaan er anders uit met een fout.
         "Title": _headerwaarde(titel),
     }
-    if bijlage and os.path.exists(bijlage):
-        # Met een bestand als body moet de tekst in een header; ntfy host het
-        # plaatje dan zelf en de app toont het in de melding.
-        with open(bijlage, "rb") as fh:
-            body = fh.read()
-        kop["Filename"] = os.path.basename(bijlage)
-        # Een HTTP-header mag geen echte regeleinden bevatten; ntfy verwacht
-        # daar de twee tekens \n en zet die zelf weer om.
-        kop["Message"] = _headerwaarde(tekst)
-        req = urllib.request.Request(f"{server}/{topic}", data=body, headers=kop, method="PUT")
-    else:
-        req = urllib.request.Request(f"{server}/{topic}", data=tekst.encode("utf-8"), headers=kop)
+    req = urllib.request.Request(f"{server}/{topic}", data=tekst.encode("utf-8"), headers=kop)
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         if resp.status >= 300:
             raise SystemExit(f"ntfy antwoordde met HTTP {resp.status}")
@@ -669,6 +663,41 @@ def vul_vaknamen(snapshots: dict) -> None:
                 if len(kandidaten) == 1:
                     les["vak"] = next(iter(kandidaten))
                     break
+
+
+# Hoe de school een vak noemt, en hoe een leerling het noemt.
+ROEPNAMEN = {
+    "lichamelijke opvoeding": "gym",
+    "mentor uur": "mentoruur",
+    "kunstzinnige vorming": "kunst",
+    "verzorging": "verzorging",
+}
+
+
+def roepnaam(vak: str) -> str:
+    """Geef de naam die een leerling gebruikt.
+
+    "Duitse taal" is hoe Somtoday het noemt; "duits" is hoe hij het noemt.
+    Talen volgen een regel (het bijvoeglijk naamwoord zonder slot-e, zonder
+    "taal"), de rest staat in ROEPNAMEN.
+    """
+    k = (vak or "").lower().strip()
+    if k in ROEPNAMEN:
+        return ROEPNAMEN[k]
+    if k.endswith(" taal"):
+        woord = k[:-5].strip()
+        return woord[:-1] if woord.endswith("e") else woord
+    return k
+
+
+def klein(tekst: str) -> str:
+    """Alles in kleine letters, behalve afkortingen als SO, KWT of PWS.
+
+    Een woord dat helemaal uit hoofdletters bestaat blijft staan; dat is bijna
+    altijd een afkorting die je niet moet verbouwen.
+    """
+    return " ".join(w if (len(w) >= 2 and w.isalpha() and w.isupper()) else w.lower()
+                    for w in (tekst or "").split())
 
 
 DAGNAMEN = ["ma", "di", "wo", "do", "vr", "za", "zo"]
@@ -782,8 +811,8 @@ def startblok(per_dag: dict, nu: dt.datetime) -> dict | None:
     return None
 
 
-def kaartgegevens(snapshots: dict, nu: dt.datetime, vooruit: int) -> tuple:
-    """Zet de komende dagen om in de secties van de kaart."""
+def dagoverzicht(snapshots: dict, nu: dt.datetime, vooruit: int) -> tuple:
+    """Zet de eerstvolgende schooldag en de toetsen erna om in de delen van de melding."""
     per_dag = _lessen_per_dag(snapshots)
     blok = startblok(per_dag, nu)
     uitval, gewijzigd = [], []
@@ -889,13 +918,29 @@ def gesproken_tijd(tijd: str) -> str:
     return f"{int(uur)}.{minuut}"
 
 
-def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
-              nu: dt.datetime) -> tuple[str, str]:
+def _uur(uur) -> str:
+    return f" ({uur}e uur)" if uur else ""
+
+
+def _korte_dag(datum: dt.date, vandaag: dt.date) -> str:
+    """Morgen, vr, of wo 8 okt: zo kort mogelijk zonder dubbelzinnig te worden."""
+    voor, dag = dagaanduiding(datum, vandaag)
+    if dag in ("vandaag", "morgen"):
+        return dag
+    kort = DAGNAMEN[datum.weekday()]
+    # Buiten deze week is een kale dagnaam niet te plaatsen; de datum wel.
+    return f"{kort} {datum.day} {MAANDEN[datum.month - 1]}" if voor else kort
+
+
+def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
+              wijzigingen: list[dict], nu: dt.datetime) -> tuple[str, str]:
     """Bouw titel en body van de melding.
 
-    Kort houden: de kaart eronder heeft de indeling al. De titel zegt wanneer
-    school begint, de body is een platte lijst. Wat op die dag valt noemt geen
-    dag; wat verder weg ligt wel.
+    De titel zegt wanneer school begint. Daaronder eerst die ene dag: met welke
+    les je begint, wat er uitvalt en wat dat betekent, wat er verandert en welke
+    toetsen er zijn. Dan wijzigingen op andere dagen (met dagnaam), en tot slot
+    de toetsen verderop. Op het lockscherm zie je de eerste regels; de rest
+    als je hem openklapt.
     """
     if not blok:
         titel, hoofddag = "Rooster bijgewerkt", None
@@ -905,33 +950,57 @@ def meldtekst(blok: dict | None, toetsen: list, wijzigingen: list,
         titel = f"{blok['dag'].capitalize()} school {gesproken_tijd(blok['tijd'])}"
         hoofddag = blok.get("datum")
 
-    # Toetsen verderop staan op de kaart; die zie je zodra je de melding opent.
-    # Wijzigingen blijven wel in de tekst, want die lees je zonder te openen.
     regels: list[str] = []
+    if blok and not blok.get("geen_les"):
+        waar = ", ".join(x for x in (f"{blok['uur']}e uur" if blok.get("uur") else None,
+                                     blok.get("lokaal")) if x)
+        regels.append(f"eerst {roepnaam(blok.get('vak') or '?')}" + (f" ({waar})" if waar else ""))
+
+    # Wat het dagoverzicht al noemt, hoeft niet nog eens als wijziging.
+    gedekt: set = set()
+    for u in uitval:
+        gevolg = u["gevolg"]
+        # Later beginnen staat al in de titel; alleen de rest krijgt een tijd.
+        if u.get("klok") and gevolg not in ("later beginnen", "geen les"):
+            gevolg += " " + u["klok"].replace(":", ".")
+        regels.append(f"- {roepnaam(u['vak'])} vervalt{_uur(u['uur'])}: {gevolg}")
+        gedekt.add((roepnaam(u["vak"]), u["uur"]))
+    for g in gewijzigd:
+        if g["label"] == "ander lokaal":
+            wat = f"in {g['nu']}, was {g['was']}"
+        elif g["label"] == "verplaatst":
+            wat = f"om {gesproken_tijd(g['nu'])}, was {gesproken_tijd(g['was'])}"
+        else:
+            wat = klein(g["label"])
+        regels.append(f"- {roepnaam(g['vak'])}{_uur(g['uur'])}: {wat}")
+        gedekt.add((roepnaam(g["vak"]), g["uur"]))
+
+    later = []
     for t in toetsen:
-        if t["_datum"] != hoofddag:
-            continue
         soort = "toets" if t["toets"] else "huiswerk"
-        tussen = [x for x in (t.get("merk"),
-                              f"{t['uur']}e uur" if t.get("uur") else None) if x]
-        haakjes = f" ({', '.join(tussen)})" if tussen else ""
-        regels.append(f"- {roepnaam(t['vak'])} {soort}{haakjes}")
+        if t["_datum"] == hoofddag:
+            tussen = [x for x in (t.get("merk"),
+                                  f"{t['uur']}e uur" if t.get("uur") else None) if x]
+            haakjes = f" ({', '.join(tussen)})" if tussen else ""
+            regels.append(f"- {roepnaam(t['vak'])} {soort}{haakjes}")
+            # Een nieuwe toets heeft in de wijziging geen lesuur; op vak alleen
+            # herkennen is genoeg, het gaat om dezelfde dag.
+            gedekt.update({(roepnaam(t["vak"]), t.get("uur")), (roepnaam(t["vak"]), None)})
+        else:
+            wat = klein(t["wat"])
+            if not t["toets"]:
+                wat = f"{wat} (huiswerk)"
+            later.append(f"{_korte_dag(t['_datum'], nu.date())}: {roepnaam(t['vak'])} - {wat}")
 
-    regels += [f"- {w}" for w in wijzigingen]
-    return titel, "\n".join(regels)
+    regels += [f"- {w['tekst']}" for w in wijzigingen
+               if w["datum"] != hoofddag or (w["vak"], w["uur"]) not in gedekt]
+
+    if later:
+        regels += ["", "Toetsen", *later]
+    return titel, "\n".join(regels).strip()
 
 
-def kaartkop(start: dict | None) -> str:
-    """De regel op het lockscherm; de begintijd is daar het nuttigst."""
-    if not start:
-        return "Rooster"
-    if start.get("geen_les"):
-        return f"{start['dag'].capitalize()}: geen les"
-    return f"{start['dag'].capitalize()} begin je om {start['tijd']}"
-
-
-def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
-             kaart: bool = False) -> None:
+def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool) -> None:
     tokens = load_tokens()
     token, api_url = refresh_access_token(tokens)
     students = api_get(api_url, token, "/rest/v1/leerlingen")
@@ -968,12 +1037,12 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
             oude = json.load(fh).get("weken", {})
 
     eerste_keer = not oude
-    # De kaartgegevens eerst: daar komt de dag uit waar deze melding over gaat,
+    # Het dagoverzicht eerst: daar komt de dag uit waar deze melding over gaat,
     # en die bepaalt of een wijzigingsregel zijn dagnaam nodig heeft.
-    blok, uitval, gewijzigd_l, toetsen = kaartgegevens(verse, nu, vooruit)
+    blok, uitval, gewijzigd_l, toetsen = dagoverzicht(verse, nu, vooruit)
     hoofddag = blok.get("datum") if blok else None
 
-    regels: list[str] = []
+    regels: list[dict] = []
     for label, snap in verse.items():
         if label in oude:  # alleen weken die we eerder al zagen
             regels += _vergelijk(oude[label], snap, tot, hoofddag)
@@ -1003,7 +1072,7 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
         kop = f"Rooster {naam}: {len(regels)} wijziging{'en' if len(regels) != 1 else ''}"
         print(kop)
         for r in regels:
-            print(f"  {r}")
+            print(f"  {r['tekst']}")
     else:
         kop = f"Rooster {naam}"
         print(f"Geen wijzigingen in de komende {dagen} dagen.")
@@ -1012,22 +1081,9 @@ def do_check(dagen: int, notify: bool, reset: bool, vooruit: int, altijd: bool,
     if not notify or not (regels or altijd):
         return
 
-    kop, tekst = meldtekst(blok, toetsen, regels, nu)
-
-    bijlage = None
-    if kaart and (blok or uitval or gewijzigd_l or toetsen):
-        try:
-            from rooster_kaart import teken_kaart
-            datumtekst = f"{DAGNAMEN[nu.weekday()]} {nu.day} {MAANDEN[nu.month - 1]}"
-            bijlage = teken_kaart(blok, uitval, gewijzigd_l, toetsen, datumtekst,
-                                  os.path.join(_HERE, "kaart.png"))
-            print(f"kaart: {bijlage}")
-        except Exception as err:
-            # Een mislukte kaart mag de melding zelf nooit tegenhouden.
-            print(f"kaart overgeslagen ({type(err).__name__}: {err})")
-
-    stuur_notificatie(kop, tekst, bijlage)
-    print("\n-> notificatie verstuurd" + (" met kaart" if bijlage else ""))
+    kop, tekst = meldtekst(blok, uitval, gewijzigd_l, toetsen, regels, nu)
+    stuur_notificatie(kop, tekst)
+    print("\n-> notificatie verstuurd")
 
 
 def main() -> None:
@@ -1045,13 +1101,12 @@ def main() -> None:
     c.add_argument("--reset", action="store_true", help="beginstand opnieuw vastleggen")
     c.add_argument("--vooruit", type=int, default=14, help="aftelling naar toetsen, in dagen (standaard 14)")
     c.add_argument("--altijd", action="store_true", help="ook pushen als er niets gewijzigd is")
-    c.add_argument("--kaart", action="store_true", help="patch notes-kaart meesturen (vereist playwright)")
 
     args = parser.parse_args()
     if args.cmd == "login":
         do_login()
     elif args.cmd == "check":
-        do_check(args.dagen, args.notify, args.reset, args.vooruit, args.altijd, args.kaart)
+        do_check(args.dagen, args.notify, args.reset, args.vooruit, args.altijd)
     else:
         show_rooster(args.week, args.json, args.leerling)
 

@@ -8,29 +8,31 @@ vast bericht om 07:15 en om 17:30 (Europe/Amsterdam, dus geen gedoe met zomertij
 
 ## De melding
 
-De tekst is wat je op het lockscherm leest zonder te openen.
+Alles staat in de tekst; een plaatje als bijlage verloopt bij ntfy na een
+paar uur, en dan is de melding van gisteravond 's ochtends leeg. Bovenaan staat
+waar het om draait - hoe laat je moet beginnen, en met welke les - zodat het
+op het lockscherm past. Openklappen geeft de rest.
 
-    Morgen school 9.00
+    Morgen school 10.10
+    eerst wiskunde (2e uur, zf101)
+    - handvaardigheid vervalt (1e uur): later beginnen
+    - muziek vervalt (4e uur): tussenuur 12.30-13.55
+    - gym vervalt (6e uur): eerder uit 14.55
+    - aardrijkskunde (3e uur): in zh005, was zh104
     - duits toets (SO, 3e uur)
-    - muziek vervalt (5e uur)
     - wiskunde vervalt (donderdag, 2e uur)
 
-Toetsen en wijzigingen hebben bewust een verschillend bereik. Een **toets**
-staat er alleen als hij op de dag uit de titel valt; verder vooruit kijk je op
-de kaart, want daar heb je nu toch niets mee te doen. Een **wijziging** staat er
-ook als hij verderop valt (binnen drie dagen), met de dagnaam erbij - die wil je
-weten zodra hij bekend is, en de kaart toont hem niet omdat die over een dag
-gaat. Valt iets op de dag uit de titel, dan blijft de dagnaam weg: "muziek
-vervalt (5e uur)".
+    Toetsen
+    do: nederlands - boekverslag (huiswerk)
+    vr: frans - SO woorden
+    wo 23 sep: wiskunde - toets hoofdstuk 1
 
-De kaart erbij heeft de rest. Bovenaan staat waar het om draait: hoe laat je
-moet beginnen, en waarom dat afwijkt als het afwijkt. Daaronder de uitval van
-die ene dag - met wat het betekent, want een tussenuur is iets anders dan naar
-huis mogen - en de toetsen tot veertien dagen vooruit.
-
-<img src="docs/voorbeeld-kaart.png" width="380" alt="Voorbeeld van de kaart">
-
-Zelf renderen met demo-data: `python3 rooster_kaart.py uit.png`.
+Eerst die ene dag uit de titel, zonder dagnaam: de uitval met wat het betekent
+(een tussenuur is iets anders dan naar huis mogen), wat er verandert en welke
+toetsen er zijn. Dan **wijzigingen** op andere dagen binnen drie dagen, met de
+dagnaam erbij - die wil je weten zodra ze bekend zijn. Een wijziging die het
+dagoverzicht al noemt komt er niet nog eens bij. Onderaan de **toetsen** tot
+veertien dagen vooruit; binnen deze week met de dagnaam, daarna met de datum.
 
 ## Hoe het werkt
 
@@ -49,15 +51,6 @@ repo staat hij versleuteld als `state.enc`, met hetzelfde wachtwoord als het
 token - er staan vakken, lokalen, docenten en toetsonderwerpen van een kind in,
 en dat hoort niet leesbaar in een repo.
 
-De kaart wordt opgebouwd als HTML en met headless Chrome naar PNG geschreven
-(`rooster_kaart.py`). Chrome staat op een GitHub-runner al klaar, dus Playwright
-gebruikt die via `channel="chrome"` en hoeft er geen te downloaden. Kleuren-emoji
-waren er niet nodig: de vakiconen zijn Lucide-SVG's die in `vakiconen.py` staan
-ingebakken. Talen krijgen geen icoon maar een vlag als achtergrond - Lucide
-heeft niets dat duits van frans onderscheidt. De vlaggen zijn CSS-gradients;
-de Union Jack is vereenvoudigd (geen diagonalen), want die zijn zo niet netjes
-te maken en op 36 pixels zie je het verschil niet.
-
 Twee dingen waar de data tegenwerkt. Uitgevallen lessen komen met een afkorting
 als vaknaam ("mu" in plaats van "muziek"); die zoeken we op via docent+lokaal en
 anders via weekdag+lesuur, en we vullen alleen in bij precies een kandidaat -
@@ -70,10 +63,10 @@ die allang bezig is.
     python3 somtoday_rooster.py login              # eenmalig, via de browser
     python3 somtoday_rooster.py rooster            # weekrooster in de terminal
     python3 somtoday_rooster.py check              # wat is er veranderd
-    python3 somtoday_rooster.py check --notify --kaart
+    python3 somtoday_rooster.py check --notify
 
 Bij `check`: `--dagen` is het venster voor wijzigingen (standaard 3), `--vooruit`
-dat voor toetsen op de kaart (standaard 14), `--altijd` pusht ook als er niets
+dat voor toetsen onderaan (standaard 14), `--altijd` pusht ook als er niets
 veranderd is, en `--reset` legt de beginstand opnieuw vast.
 
 Een run handmatig uitlokken zonder te wachten:

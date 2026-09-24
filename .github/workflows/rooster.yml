@@ -43,9 +43,6 @@ jobs:
       - name: Welke planning trok dit
         run: echo "schedule=[${{ github.event.schedule }}] event=${{ github.event_name }}"
 
-      - name: Playwright
-        run: pip install --quiet playwright
-
       # Zowel het token als de opgeslagen stand: in state.json staat het rooster
       # met vakken, lokalen, docenten en toetsonderwerpen, en dat hoort niet
       # leesbaar in een repo.
@@ -68,7 +65,7 @@ jobs:
           # De ochtendrun stuurt altijd een bericht met de agenda; de uurruns
           # alleen als er echt iets gewijzigd is.
           ALTIJD: ${{ (github.event.schedule == '15 7 * * 1-5' || github.event.schedule == '45 18 * * 0-4' || inputs.altijd) && '--altijd' || '' }}
-        run: python3 somtoday_rooster.py check --notify --kaart --dagen 3 --vooruit 14 $ALTIJD
+        run: python3 somtoday_rooster.py check --notify --dagen 3 --vooruit 14 $ALTIJD
 
       # Moet ook draaien als de stap hierboven faalt: het token kan dan al
       # geroteerd zijn, en het oude is vanaf dat moment waardeloos.

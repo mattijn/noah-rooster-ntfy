@@ -9,5 +9,3 @@ __pycache__/
 # tokens.enc en state.enc horen er juist wel in: de Action heeft ze nodig om
 # tussen runs te onthouden wat de vorige stand was. De onversleutelde versies
 # blijven erbuiten - in state.json staat het rooster van een kind.
-
-kaart.png
