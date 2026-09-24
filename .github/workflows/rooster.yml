@@ -5,13 +5,14 @@ on:
     # Met een tijdzone per regel; zonder dat zou alles UTC zijn en twee keer
     # per jaar een uur verschuiven.
     # Voor 07:00 zet de school nog niets bij; eerder kijken heeft geen zin.
-    - cron: "15 7 * * 1-5"     # ochtendbericht
-      timezone: "Europe/Amsterdam"
     # Niet op het hele uur: dat is volgens de documentatie het drukste moment,
     # en dan worden runs niet alleen vertraagd maar soms weggegooid.
-    - cron: "20 7-17 * * 1-5"  # elk uur tijdens schooltijd
+    - cron: "15 7 * * 1-5"     # ochtendbericht
       timezone: "Europe/Amsterdam"
-    - cron: "45 18 * * 0-4"    # morgen alvast weten, avond voor een schooldag
+    - cron: "15 13 * * 1-5"    # middag, alleen bij wijzigingen
+      timezone: "Europe/Amsterdam"
+    # Zondag ook: dan weet je maandag al de avond ervoor.
+    - cron: "15 17 * * 0-5"    # de volgende schooldag alvast weten
       timezone: "Europe/Amsterdam"
   workflow_dispatch:
     inputs:
@@ -62,9 +63,9 @@ jobs:
       - name: Rooster controleren
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          # De ochtendrun stuurt altijd een bericht met de agenda; de uurruns
-          # alleen als er echt iets gewijzigd is.
-          ALTIJD: ${{ (github.event.schedule == '15 7 * * 1-5' || github.event.schedule == '45 18 * * 0-4' || inputs.altijd) && '--altijd' || '' }}
+          # De ochtend- en avondrun sturen altijd een bericht met de agenda;
+          # de middagrun alleen als er echt iets gewijzigd is.
+          ALTIJD: ${{ (github.event.schedule == '15 7 * * 1-5' || github.event.schedule == '15 17 * * 0-5' || inputs.altijd) && '--altijd' || '' }}
         run: python3 somtoday_rooster.py check --notify --dagen 3 --vooruit 14 $ALTIJD
 
       # Moet ook draaien als de stap hierboven faalt: het token kan dan al

@@ -3,8 +3,10 @@
 Leest Noahs weekrooster uit Somtoday en pusht wijzigingen naar ntfy.
 
 Meldt uitval, verplaatsingen, lokaalwijzigingen en nieuwe toetsen/huiswerk.
-Draait als GitHub Action: doordeweeks elk uur tijdens schooltijd, plus een
-vast bericht om 07:15 en om 17:30 (Europe/Amsterdam, dus geen gedoe met zomertijd).
+Draait als GitHub Action, drie keer per dag (Europe/Amsterdam, dus geen gedoe
+met zomertijd): om 07:15 en 17:15 altijd een bericht, om 13:15 alleen als er
+iets veranderd is. De avondrun draait ook op zondag, voor maandag. Een geplande
+run kan uren te laat komen; daarom noemt de melding de dag bij naam.
 
 ## De melding
 
