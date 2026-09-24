@@ -1004,7 +1004,7 @@ def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             wat = klein(t["wat"])
             if not t["toets"]:
                 wat = f"{wat} (huiswerk)"
-            later.append(f"{_toetsdag(t['_datum'], nu.date())}: {roepnaam(t['vak'])} - {wat}")
+            later.append(f"- {_toetsdag(t['_datum'], nu.date())}: {roepnaam(t['vak'])} - {wat}")
 
     regels += [f"- {w['tekst']}" for w in wijzigingen
                if w["datum"] != hoofddag or (w["vak"], w["uur"]) not in gedekt]
