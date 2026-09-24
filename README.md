@@ -13,7 +13,7 @@ paar uur, en dan is de melding van gisteravond 's ochtends leeg. Bovenaan staat
 waar het om draait - hoe laat je moet beginnen, en met welke les - zodat het
 op het lockscherm past. Openklappen geeft de rest.
 
-    Morgen school 10.10
+    Woensdag school 10.10
     eerst wiskunde (2e uur, f101)
     - handvaardigheid vervalt (1e uur): later beginnen
     - muziek vervalt (4e uur): tussenuur 12.30-13.55
@@ -27,7 +27,9 @@ op het lockscherm past. Openklappen geeft de rest.
     vrijdag (nog 3 dagen): frans - SO woorden
     volgende week woensdag (nog 8 dagen): wiskunde - toets hoofdstuk 1
 
-Eerst die ene dag uit de titel, zonder dagnaam: de uitval met wat het betekent
+De titel noemt de dag bij naam, nooit "morgen": de Action loopt soms uren
+achter, en dan weet je niet meer vanaf wanneer dat gerekend is. Eerst die
+ene dag uit de titel, zonder dagnaam: de uitval met wat het betekent
 (een tussenuur is iets anders dan naar huis mogen), wat er verandert en welke
 toetsen er zijn. Dan **wijzigingen** op andere dagen binnen drie dagen, met de
 dagnaam erbij - die wil je weten zodra ze bekend zijn. Een wijziging die het

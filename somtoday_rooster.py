@@ -929,12 +929,15 @@ def _lokaal(lokaal: str | None) -> str:
 
 
 def _toetsdag(datum: dt.date, vandaag: dt.date) -> str:
-    """Morgen, vrijdag (nog 3 dagen), volgende week woensdag (nog 8 dagen).
+    """Vrijdag, dinsdag (nog 3 dagen), volgende week woensdag (nog 8 dagen).
 
     Geen datum: die moet je omrekenen. De dagnaam zegt wanneer, de aftelling
-    hoe dichtbij.
+    hoe dichtbij. Nooit "vandaag" of "morgen": de Action loopt soms uren
+    achter, en wie de melding later leest weet niet meer wanneer hij kwam.
     """
     voor, dag = dagaanduiding(datum, vandaag)
+    if dag in ("vandaag", "morgen"):
+        dag = VOLLE_DAGNAMEN[datum.weekday()]
     dagen = (datum - vandaag).days
     naam = f"{voor} {dag}" if voor else dag
     return f"{naam} (nog {dagen} dagen)" if dagen >= 2 else naam
@@ -950,13 +953,16 @@ def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
     de toetsen verderop. Op het lockscherm zie je de eerste regels; de rest
     als je hem openklapt.
     """
+    # De dagnaam in de titel, niet "morgen": een run kan uren te laat zijn,
+    # en dan is niet meer te zien vanaf wanneer "morgen" gerekend is.
+    hoofddag = blok.get("datum") if blok else None
+    dag = VOLLE_DAGNAMEN[hoofddag.weekday()].capitalize() if hoofddag else ""
     if not blok:
-        titel, hoofddag = "Rooster bijgewerkt", None
+        titel = "Rooster bijgewerkt"
     elif blok.get("geen_les"):
-        titel, hoofddag = f"{blok['dag'].capitalize()} geen school", blok.get("datum")
+        titel = f"{dag} geen school"
     else:
-        titel = f"{blok['dag'].capitalize()} school {gesproken_tijd(blok['tijd'])}"
-        hoofddag = blok.get("datum")
+        titel = f"{dag} school {gesproken_tijd(blok['tijd'])}"
 
     regels: list[str] = []
     if blok and not blok.get("geen_les"):
