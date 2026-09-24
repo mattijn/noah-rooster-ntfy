@@ -14,25 +14,27 @@ waar het om draait - hoe laat je moet beginnen, en met welke les - zodat het
 op het lockscherm past. Openklappen geeft de rest.
 
     Morgen school 10.10
-    eerst wiskunde (2e uur, zf101)
+    eerst wiskunde (2e uur, f101)
     - handvaardigheid vervalt (1e uur): later beginnen
     - muziek vervalt (4e uur): tussenuur 12.30-13.55
     - gym vervalt (6e uur): eerder uit 14.55
-    - aardrijkskunde (3e uur): in zh005, was zh104
+    - aardrijkskunde (3e uur): in h005, was h104
     - duits toets (SO, 3e uur)
     - wiskunde vervalt (donderdag, 2e uur)
 
     Toetsen
-    do: nederlands - boekverslag (huiswerk)
-    vr: frans - SO woorden
-    wo 23 sep: wiskunde - toets hoofdstuk 1
+    donderdag (nog 2 dagen): nederlands - boekverslag (huiswerk)
+    vrijdag (nog 3 dagen): frans - SO woorden
+    volgende week woensdag (nog 8 dagen): wiskunde - toets hoofdstuk 1
 
 Eerst die ene dag uit de titel, zonder dagnaam: de uitval met wat het betekent
 (een tussenuur is iets anders dan naar huis mogen), wat er verandert en welke
 toetsen er zijn. Dan **wijzigingen** op andere dagen binnen drie dagen, met de
 dagnaam erbij - die wil je weten zodra ze bekend zijn. Een wijziging die het
 dagoverzicht al noemt komt er niet nog eens bij. Onderaan de **toetsen** tot
-veertien dagen vooruit; binnen deze week met de dagnaam, daarna met de datum.
+veertien dagen vooruit, met de dag zoals je die zegt ("volgende week woensdag")
+en hoeveel dagen het nog is - geen datum, die moet je omrekenen. Lokalen
+staan er zonder de z waar ze allemaal mee beginnen.
 
 ## Hoe het werkt
 

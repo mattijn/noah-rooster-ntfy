@@ -527,7 +527,7 @@ def _vergelijk(oud: dict, nieuw: dict, tot: dt.datetime,
             elif veld == "begin":
                 meld(na, f"{vak} begint om {str(wordt)[11:16]}{plek(na)}")
             elif veld == "lokaal":
-                meld(na, f"{vak} in {wordt}{plek(na)}")
+                meld(na, f"{vak} in {_lokaal(wordt)}{plek(na)}")
             elif veld == "docent":
                 meld(na, f"{vak} met {klein(wordt)}{plek(na)}")
             else:
@@ -922,14 +922,22 @@ def _uur(uur) -> str:
     return f" ({uur}e uur)" if uur else ""
 
 
-def _korte_dag(datum: dt.date, vandaag: dt.date) -> str:
-    """Morgen, vr, of wo 8 okt: zo kort mogelijk zonder dubbelzinnig te worden."""
+def _lokaal(lokaal: str | None) -> str:
+    """zf101 wordt f101: elk lokaal begint met een z, dus die zegt niets."""
+    lokaal = (lokaal or "").strip()
+    return lokaal[1:] if lokaal[:1].lower() == "z" and len(lokaal) > 1 else lokaal
+
+
+def _toetsdag(datum: dt.date, vandaag: dt.date) -> str:
+    """Morgen, vrijdag (nog 3 dagen), volgende week woensdag (nog 8 dagen).
+
+    Geen datum: die moet je omrekenen. De dagnaam zegt wanneer, de aftelling
+    hoe dichtbij.
+    """
     voor, dag = dagaanduiding(datum, vandaag)
-    if dag in ("vandaag", "morgen"):
-        return dag
-    kort = DAGNAMEN[datum.weekday()]
-    # Buiten deze week is een kale dagnaam niet te plaatsen; de datum wel.
-    return f"{kort} {datum.day} {MAANDEN[datum.month - 1]}" if voor else kort
+    dagen = (datum - vandaag).days
+    naam = f"{voor} {dag}" if voor else dag
+    return f"{naam} (nog {dagen} dagen)" if dagen >= 2 else naam
 
 
 def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
@@ -953,7 +961,7 @@ def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
     regels: list[str] = []
     if blok and not blok.get("geen_les"):
         waar = ", ".join(x for x in (f"{blok['uur']}e uur" if blok.get("uur") else None,
-                                     blok.get("lokaal")) if x)
+                                     _lokaal(blok.get("lokaal"))) if x)
         regels.append(f"eerst {roepnaam(blok.get('vak') or '?')}" + (f" ({waar})" if waar else ""))
 
     # Wat het dagoverzicht al noemt, hoeft niet nog eens als wijziging.
@@ -967,7 +975,7 @@ def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
         gedekt.add((roepnaam(u["vak"]), u["uur"]))
     for g in gewijzigd:
         if g["label"] == "ander lokaal":
-            wat = f"in {g['nu']}, was {g['was']}"
+            wat = f"in {_lokaal(g['nu'])}, was {_lokaal(g['was'])}"
         elif g["label"] == "verplaatst":
             wat = f"om {gesproken_tijd(g['nu'])}, was {gesproken_tijd(g['was'])}"
         else:
@@ -990,7 +998,7 @@ def meldtekst(blok: dict | None, uitval: list, gewijzigd: list, toetsen: list,
             wat = klein(t["wat"])
             if not t["toets"]:
                 wat = f"{wat} (huiswerk)"
-            later.append(f"{_korte_dag(t['_datum'], nu.date())}: {roepnaam(t['vak'])} - {wat}")
+            later.append(f"{_toetsdag(t['_datum'], nu.date())}: {roepnaam(t['vak'])} - {wat}")
 
     regels += [f"- {w['tekst']}" for w in wijzigingen
                if w["datum"] != hoofddag or (w["vak"], w["uur"]) not in gedekt]
